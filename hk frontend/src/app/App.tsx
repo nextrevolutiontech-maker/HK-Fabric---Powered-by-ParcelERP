@@ -29,11 +29,23 @@ interface Order {
   status: OrderStatus; codStatus: CODStatus; date: string;
   courier?: string; trackingNo?: string; products: Product[];
   notes?: string; type: "COD" | "NON-COD";
+  province?: string;
+  deliveryCharges?: number;
   receivedDate?: string;
   receiptUrl?: string;
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
+// ─── Mock Data & Constants ──────────────────────────────────────────────────────
+const PROVINCE_CITIES: Record<string, string[]> = {
+  "Punjab": ["Lahore", "Faisalabad", "Rawalpindi", "Multan", "Gujranwala", "Sargodha", "Bahawalpur", "Sialkot", "Sheikhupura", "Rahim Yar Khan", "Jhang", "Dera Ghazi Khan", "Gujrat", "Sahiwal", "Kasur", "Okara", "Chiniot", "Kamoke", "Hafizabad", "Sadiqabad", "Burewala", "Muzaffargarh", "Khanpur", "Gojra", "Bahawalnagar", "Muridke", "Pakpattan", "Jaranwala", "Chishtian", "Daska", "Mandi Bahauddin", "Ahmadpur East", "Kamalia", "Vehari", "Wazirabad", "Khushab", "Chakwal", "Mianwali", "Kot Adu"].sort(),
+  "Sindh": ["Karachi", "Hyderabad", "Sukkur", "Larkana", "Nawabshah", "Mirpur Khas", "Jacobabad", "Shikarpur", "Tando Adam", "Khairpur", "Dadu", "Tando Allahyar", "Kotri", "Thatta", "Badin", "Ghotki", "Kashmore", "Umerkot", "Matiari"].sort(),
+  "Khyber Pakhtunkhwa": ["Peshawar", "Mardan", "Mingora", "Kohat", "Abbottabad", "Dera Ismail Khan", "Nowshera", "Charsadda", "Swabi", "Mansehra", "Bannu", "Timargara", "Haripur", "Swat", "Chitral"].sort(),
+  "Balochistan": ["Quetta", "Turbat", "Khuzdar", "Hub", "Chaman", "Gwadar", "Dera Murad Jamali", "Sibi", "Zhob", "Loralai"].sort(),
+  "Azad Kashmir": ["Muzaffarabad", "Mirpur", "Rawalakot", "Kotli", "Bhimber", "Bagh", "Sudhanoti"].sort(),
+  "Gilgit-Baltistan": ["Gilgit", "Skardu", "Hunza", "Chilas", "Gahkuch", "Aliabad", "Shigar", "Khaplu"].sort(),
+  "Islamabad Capital Territory": ["Islamabad"]
+};
+const PROVINCES = Object.keys(PROVINCE_CITIES);
 
 const MOCK_ORDERS: Order[] = [
   {
@@ -139,20 +151,20 @@ function formatPKR(n: number): string {
 
 function StatusBadge({ status }: { status: OrderStatus | CODStatus }) {
   const map: Record<string, string> = {
-    pending: "bg-amber-50 text-amber-700 border border-amber-200",
-    processing: "bg-blue-50 text-blue-700 border border-blue-200",
-    shipped: "bg-indigo-50 text-indigo-700 border border-indigo-200",
-    delivered: "bg-green-50 text-green-700 border border-green-200",
-    returned: "bg-orange-50 text-orange-700 border border-orange-200",
-    void: "bg-red-50 text-red-600 border border-red-200",
-    received: "bg-green-50 text-green-700 border border-green-200",
+    pending: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20",
+    processing: "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20",
+    shipped: "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20",
+    delivered: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20",
+    returned: "bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20",
+    void: "bg-slate-50 text-slate-500 ring-1 ring-inset ring-slate-500/20",
+    received: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20",
   };
   const labels: Record<string, string> = {
     pending: "Pending", processing: "Processing", shipped: "Shipped",
     delivered: "Delivered", returned: "Returned", void: "Void", received: "Received",
   };
   return (
-    <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-mono tracking-wide", map[status])}>
+    <span className={cn("inline-flex items-center px-2 py-[2px] rounded-md text-[11px] font-medium tracking-wide", map[status])}>
       {labels[status]}
     </span>
   );
@@ -165,14 +177,14 @@ function Btn({
   size?: "sm" | "md" | "lg"; onClick?: () => void; className?: string;
   disabled?: boolean; type?: "button" | "submit";
 }) {
-  const base = "inline-flex items-center gap-2 font-medium rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed";
+  const base = "inline-flex items-center justify-center gap-2 font-medium rounded-md transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
   const v = {
-    primary: "bg-[#0F172A] text-white hover:bg-[#1E293B] focus:ring-[#0F172A]",
-    secondary: "bg-white text-[#0F172A] border border-slate-200 hover:bg-slate-50 focus:ring-slate-300",
-    ghost: "bg-transparent text-slate-600 hover:bg-slate-100 focus:ring-slate-200",
-    danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-400",
+    primary: "bg-[#0F172A] text-white shadow-sm hover:bg-[#1E293B] focus-visible:outline-[#0F172A]",
+    secondary: "bg-white text-[#0F172A] shadow-sm ring-1 ring-inset ring-slate-200 hover:bg-slate-50",
+    ghost: "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+    danger: "bg-red-600 text-white shadow-sm hover:bg-red-700 focus-visible:outline-red-600",
   };
-  const s = { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm", lg: "px-5 py-2.5 text-sm" };
+  const s = { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm", lg: "px-6 py-2.5 text-sm" };
   return (
     <button type={type} onClick={onClick} disabled={disabled} className={cn(base, v[variant], s[size], className)}>
       {children}
@@ -182,17 +194,16 @@ function Btn({
 
 function FieldInput({ label, required, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: string; required?: boolean }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       {label && (
-        <label className="text-sm font-medium text-slate-700">
+        <label className="block text-sm font-medium text-slate-700">
           {label}{required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
       <input
         {...props}
         className={cn(
-          "w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-md",
-          "placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors",
+          "block w-full rounded-md border-0 py-2 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] sm:text-sm sm:leading-6 transition-all duration-200",
           props.className
         )}
       />
@@ -202,13 +213,12 @@ function FieldInput({ label, required, ...props }: InputHTMLAttributes<HTMLInput
 
 function FieldSelect({ label, children, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
   return (
-    <div className="flex flex-col gap-1">
-      {label && <label className="text-sm font-medium text-slate-700">{label}</label>}
+    <div className="flex flex-col gap-1.5">
+      {label && <label className="block text-sm font-medium text-slate-700">{label}</label>}
       <select
         {...props}
         className={cn(
-          "w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-md",
-          "focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors",
+          "block w-full rounded-md border-0 py-2 pl-3 pr-10 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] sm:text-sm sm:leading-6 transition-all duration-200 bg-white",
           props.className
         )}
       >
@@ -222,34 +232,47 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
-          <h3 className="text-base font-semibold text-[#0F172A]">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-slate-100 transition-colors">
-            <X size={18} className="text-slate-400" />
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      <div className="relative bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] w-full max-w-md mx-auto max-h-[90vh] flex flex-col transform transition-all">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <h3 className="text-lg font-semibold text-[#0F172A] tracking-tight">{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-md text-slate-400 hover:text-slate-500 hover:bg-slate-100 transition-colors">
+            <X size={18} />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-6 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value, sub, color, icon: Icon }: {
-  label: string; value: string | number; sub?: string; color: string; icon: ElementType;
+function StatCard({ label, value, sub, color, icon: Icon, priority = "secondary" }: {
+  label: string; value: string | number; sub?: string; color?: string; icon: ElementType;
+  priority?: "primary" | "secondary" | "tertiary";
 }) {
+  const pStyles = {
+    primary: "p-6",
+    secondary: "p-4 sm:p-5",
+    tertiary: "p-4 sm:p-5 opacity-80 bg-slate-50 border-transparent",
+  };
+  const valStyles = {
+    primary: "text-3xl font-semibold tracking-tight text-[#0F172A]",
+    secondary: "text-2xl font-semibold tracking-tight text-[#0F172A]",
+    tertiary: "text-xl font-medium tracking-tight text-slate-500",
+  };
   return (
-    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-3">
+    <div className={cn("bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3 sm:gap-4 transition-all duration-200 hover:border-slate-300", pStyles[priority])}>
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">{label}</span>
-        <div className={cn("p-2 rounded-lg", color)}>
-          <Icon size={15} />
-        </div>
+        <span className={cn("text-xs font-medium tracking-wider uppercase", priority === "tertiary" ? "text-slate-400" : "text-slate-500")}>{label}</span>
+        {priority !== "tertiary" && color && (
+          <div className={cn("p-1.5 rounded-md shadow-sm ring-1 ring-inset ring-black/5", color)}>
+            <Icon size={14} />
+          </div>
+        )}
       </div>
       <div>
-        <div className="text-2xl font-bold text-[#0F172A] font-mono leading-none">{value}</div>
-        {sub && <div className="text-xs text-slate-400 mt-1.5">{sub}</div>}
+        <div className={cn("font-mono leading-none", valStyles[priority])}>{value}</div>
+        {sub && <div className="text-xs text-slate-400 mt-2 font-medium">{sub}</div>}
       </div>
     </div>
   );
@@ -276,18 +299,18 @@ function Sidebar({ screen, setScreen, open, onClose }: {
   const go = (id: Screen) => { setScreen(id); onClose(); };
 
   const inner = (
-    <div className="flex flex-col h-full bg-[#0F172A]">
-      <div className="flex items-center gap-3 p-5 border-b border-white/10 flex-shrink-0">
-        <div className="w-9 h-9 bg-[#D4AF37] rounded-lg flex items-center justify-center flex-shrink-0">
-          <Layers size={18} className="text-[#0F172A]" />
+    <div className="flex flex-col h-full bg-black">
+      <div className="flex items-center gap-3 p-6 border-b border-white/10 flex-shrink-0">
+        <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center flex-shrink-0 shadow-sm">
+          <Layers size={16} className="text-black" />
         </div>
         <div>
-          <div className="font-bold text-white text-[15px] leading-tight">HK Fabric</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Courier & COD System</div>
+          <div className="font-semibold text-white text-[15px] tracking-tight leading-tight">HK Fabric</div>
+          <div className="text-[11px] text-white/60 mt-0.5 font-medium tracking-wide">COURIER SYSTEM</div>
         </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto scrollbar-hide">
         {NAV.map(({ id, label, icon: Icon }) => {
           const active = screen === id || (screen === "order-detail" && id === "orders");
           return (
@@ -295,16 +318,21 @@ function Sidebar({ screen, setScreen, open, onClose }: {
               key={id}
               onClick={() => go(id as Screen)}
               className={cn(
-                "relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
-                active ? "bg-white/10 text-white" : "text-slate-400 hover:text-white hover:bg-white/5"
+                "relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group",
+                active 
+                  ? "bg-white/[0.12] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] ring-1 ring-inset ring-white/[0.05]" 
+                  : "text-white/70 hover:text-white hover:bg-white/[0.06]"
               )}
             >
-              {active && <span className="absolute left-0 inset-y-2 w-0.5 bg-[#D4AF37] rounded-r-full" />}
-              <Icon size={16} />
-              <span>{label}</span>
+              {active && <span className="absolute left-0 inset-y-2 w-[3px] bg-white rounded-r-full shadow-[0_0_8px_rgba(255,255,255,0.5)]" />}
+              <Icon size={16} strokeWidth={active ? 2.5 : 2} className={cn(
+                "transition-colors",
+                active ? "text-white" : "text-white/50 group-hover:text-white/80"
+              )} />
+              <span className={cn("tracking-wide", active && "font-semibold")}>{label}</span>
               {id === "create-order" && (
-                <span className="ml-auto w-5 h-5 bg-[#D4AF37] rounded-full flex items-center justify-center flex-shrink-0">
-                  <Plus size={10} className="text-[#0F172A]" />
+                <span className="ml-auto w-5 h-5 bg-white rounded-full flex items-center justify-center flex-shrink-0">
+                  <Plus size={10} className="text-black" />
                 </span>
               )}
             </button>
@@ -313,13 +341,13 @@ function Sidebar({ screen, setScreen, open, onClose }: {
       </nav>
 
       <div className="p-4 border-t border-white/10 flex-shrink-0">
-        <div className="flex items-center gap-3 px-2 py-1.5">
-          <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center flex-shrink-0">
-            <User size={14} className="text-slate-300" />
+        <div className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-white/10 transition-colors cursor-pointer">
+          <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center flex-shrink-0 ring-1 ring-white/20">
+            <User size={14} className="text-white" />
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-medium text-white">Sami / Abid</div>
-            <div className="text-xs text-slate-500">Staff Account</div>
+            <div className="text-sm font-medium text-white truncate">Sami / Abid</div>
+            <div className="text-[11px] text-white/60 font-medium">Staff Account</div>
           </div>
         </div>
       </div>
@@ -352,26 +380,26 @@ function Header({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSea
   const timeStr = time.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
   return (
-    <header className="bg-white border-b border-slate-100 px-4 lg:px-6 py-3 flex items-center gap-3 flex-shrink-0 z-30">
-      <button onClick={onMenuClick} className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors">
-        <Menu size={19} className="text-slate-500" />
+    <header className="bg-white border-b border-slate-100 px-4 lg:px-6 py-3 flex items-center gap-4 flex-shrink-0 z-30 sticky top-0">
+      <button onClick={onMenuClick} className="lg:hidden p-2 -ml-2 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+        <Menu size={20} />
       </button>
 
       <div className="flex items-center gap-2 flex-shrink-0 lg:hidden mr-1">
-        <div className="w-8 h-8 bg-[#0F172A] rounded-lg flex items-center justify-center">
-          <Layers size={15} className="text-[#D4AF37]" />
+        <div className="w-8 h-8 bg-[#0F172A] rounded-md flex items-center justify-center shadow-sm">
+          <Layers size={14} className="text-[#D4AF37]" />
         </div>
-        <span className="font-bold text-[#0F172A] text-sm hidden sm:inline">HK Fabric</span>
+        <span className="font-semibold text-[#0F172A] text-sm hidden sm:inline tracking-tight">HK Fabric</span>
       </div>
 
       <button
         onClick={onSearchClick}
-        className="flex-1 max-w-sm flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-400 hover:border-slate-300 transition-all"
+        className="flex-1 max-w-md flex items-center gap-2 px-3 py-2 bg-slate-50/50 hover:bg-slate-100 border-0 rounded-md text-sm text-slate-500 transition-colors shadow-sm ring-1 ring-inset ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-[#0F172A]"
       >
-        <Search size={14} />
+        <Search size={16} className="text-slate-400" />
         <span className="hidden sm:inline">Search orders, customers...</span>
         <span className="sm:hidden">Search...</span>
-        <kbd className="hidden lg:inline-flex ml-auto text-xs bg-white border border-slate-200 rounded px-1.5 py-0.5">⌘K</kbd>
+        <kbd className="hidden lg:inline-flex ml-auto text-[10px] font-medium font-mono bg-white border border-slate-200 text-slate-400 rounded-sm px-1.5 py-0.5 leading-none shadow-sm">⌘K</kbd>
       </button>
 
       <div className="ml-auto flex items-center gap-3">
@@ -414,35 +442,35 @@ function GlobalSearch({ open, onClose, setScreen, setSelectedOrderId, orders }: 
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { onClose(); setQ(""); }} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg">
-        <div className="flex items-center gap-3 p-4 border-b border-slate-100">
-          <Search size={17} className="text-slate-400 flex-shrink-0" />
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4 sm:pt-24">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => { onClose(); setQ(""); }} />
+      <div className="relative bg-white rounded-xl shadow-[0_16px_40px_rgb(0,0,0,0.12)] border border-slate-200/50 w-full max-w-2xl transform transition-all flex flex-col max-h-[80vh]">
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-100 flex-shrink-0">
+          <Search size={18} className="text-slate-400 flex-shrink-0" />
           <input
             autoFocus value={q} onChange={e => setQ(e.target.value)}
-            placeholder="Order no, customer, WhatsApp, tracking..."
-            className="flex-1 text-sm outline-none placeholder:text-slate-400 font-mono"
+            placeholder="Search by order no, customer, WhatsApp, or tracking..."
+            className="flex-1 text-base outline-none placeholder:text-slate-400 font-medium bg-transparent"
           />
-          <button onClick={() => { onClose(); setQ(""); }} className="p-1 rounded hover:bg-slate-100">
-            <X size={15} className="text-slate-400" />
+          <button onClick={() => { onClose(); setQ(""); }} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 transition-colors">
+            <X size={16} />
           </button>
         </div>
         {hasResults ? (
-          <div className="max-h-[70vh] overflow-y-auto p-4 space-y-4">
+          <div className="overflow-y-auto p-2 space-y-4">
             {matchingCustomers.length > 0 && (
-              <div>
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-1"><User size={12} /> Customers</h4>
-                <div className="space-y-1">
+              <div className="px-2">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5"><User size={12} /> Customers</h4>
+                <div className="space-y-0.5">
                   {Array.from(new Set(matchingCustomers.map(o => o.whatsapp))).map(w => {
                     const o = matchingCustomers.find(item => item.whatsapp === w)!;
                     return (
-                      <div key={w} className="p-2 rounded-lg hover:bg-slate-50 border border-slate-100 flex justify-between items-center text-xs">
+                      <div key={w} className="px-3 py-2.5 rounded-md hover:bg-slate-50 flex justify-between items-center text-sm cursor-pointer transition-colors group">
                         <div>
-                          <div className="font-semibold text-slate-800">{o.customer}</div>
-                          <div className="text-slate-400 font-mono">{o.whatsapp}</div>
+                          <div className="font-medium text-slate-900 group-hover:text-[#0F172A]">{o.customer}</div>
+                          <div className="text-slate-500 font-mono text-xs">{o.whatsapp}</div>
                         </div>
-                        <span className="text-slate-400 font-mono text-[10px]">{o.city}</span>
+                        <span className="text-slate-400 text-xs">{o.city}</span>
                       </div>
                     );
                   })}
@@ -451,16 +479,18 @@ function GlobalSearch({ open, onClose, setScreen, setSelectedOrderId, orders }: 
             )}
             
             {matchingOrders.length > 0 && (
-              <div>
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-1"><Package size={12} /> Orders</h4>
-                <div className="space-y-1">
+              <div className="px-2">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Package size={12} /> Orders</h4>
+                <div className="space-y-0.5">
                   {matchingOrders.map(o => (
                     <button key={o.id}
                       onClick={() => { setSelectedOrderId(o.id); setScreen("order-detail"); setQ(""); onClose(); }}
-                      className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 border border-slate-100 text-left text-xs"
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-md hover:bg-slate-50 text-left text-sm transition-colors group"
                     >
-                      <div className="font-mono font-semibold text-[#0F172A]">{o.id}</div>
-                      <div className="text-slate-500">{o.customer}</div>
+                      <div className="flex items-center gap-3">
+                        <div className="font-mono font-medium text-slate-900 group-hover:text-[#0F172A]">{o.id}</div>
+                        <div className="text-slate-500 hidden sm:block">{o.customer}</div>
+                      </div>
                       <StatusBadge status={o.status} />
                     </button>
                   ))}
@@ -469,19 +499,19 @@ function GlobalSearch({ open, onClose, setScreen, setSelectedOrderId, orders }: 
             )}
 
             {matchingTracking.length > 0 && (
-              <div>
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-1"><Truck size={12} /> Tracking</h4>
-                <div className="space-y-1">
+              <div className="px-2">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Truck size={12} /> Tracking</h4>
+                <div className="space-y-0.5">
                   {matchingTracking.map(o => (
                     <button key={o.id}
                       onClick={() => { setSelectedOrderId(o.id); setScreen("order-detail"); setQ(""); onClose(); }}
-                      className="w-full flex flex-col p-2 rounded-lg hover:bg-slate-50 border border-slate-100 text-left text-xs"
+                      className="w-full flex flex-col px-3 py-2.5 rounded-md hover:bg-slate-50 text-left transition-colors group"
                     >
-                      <div className="flex justify-between font-mono text-[10px] text-slate-400">
-                        <span>Order: {o.id}</span>
-                        <span>{o.courier}</span>
+                      <div className="flex justify-between font-mono text-xs text-slate-500 w-full mb-1">
+                        <span>{o.id}</span>
+                        <span className="text-slate-400">{o.courier}</span>
                       </div>
-                      <div className="font-mono text-slate-700 mt-0.5">{o.trackingNo}</div>
+                      <div className="font-mono font-medium text-slate-900 group-hover:text-[#0F172A]">{o.trackingNo}</div>
                     </button>
                   ))}
                 </div>
@@ -489,17 +519,17 @@ function GlobalSearch({ open, onClose, setScreen, setSelectedOrderId, orders }: 
             )}
 
             {matchingCOD.length > 0 && (
-              <div>
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-1"><Banknote size={12} /> COD History</h4>
-                <div className="space-y-1">
+              <div className="px-2">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Banknote size={12} /> COD History</h4>
+                <div className="space-y-0.5">
                   {matchingCOD.map(o => (
                     <button key={o.id}
                       onClick={() => { setSelectedOrderId(o.id); setScreen("order-detail"); setQ(""); onClose(); }}
-                      className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 border border-slate-100 text-left text-xs"
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-md hover:bg-slate-50 text-left text-sm transition-colors group"
                     >
                       <div>
-                        <span className="font-mono font-semibold text-[#0F172A]">{o.id}</span>
-                        <span className="text-slate-400 ml-2 font-mono">{formatPKR(o.amount)}</span>
+                        <span className="font-mono font-medium text-slate-900 group-hover:text-[#0F172A]">{o.id}</span>
+                        <span className="text-slate-500 ml-3 font-mono">{formatPKR(o.amount)}</span>
                       </div>
                       <StatusBadge status={o.codStatus} />
                     </button>
@@ -581,14 +611,18 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
         </div>
       )}
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <StatCard label="Today's Orders" value={todayOrders.length} sub="As of now" color="bg-blue-50 text-blue-600" icon={Package} />
-        <StatCard label="Pending Tracking" value={pendingTracking} sub="Without tracking" color="bg-amber-50 text-amber-600" icon={Clock} />
-        <StatCard label="Pending COD" value={pendingCOD} sub="Delivered, unpaid" color="bg-orange-50 text-orange-600" icon={AlertCircle} />
-        <StatCard label="Received COD" value={formatPKR(receivedCOD)} sub="This week" color="bg-green-50 text-green-600" icon={CheckCircle2} />
-        <StatCard label="Today's Revenue" value={formatPKR(todayRevenue)} sub={`${todayOrders.length} orders`} color="bg-indigo-50 text-indigo-600" icon={TrendingUp} />
-        <StatCard label="Void Orders" value={voidOrders} sub="All time" color="bg-red-50 text-red-500" icon={Ban} />
+      {/* Stat cards - Visual Hierarchy Implemented */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div className="col-span-1 md:col-span-6 lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <StatCard label="Today's Revenue" value={formatPKR(todayRevenue)} sub={`From ${todayOrders.length} orders today`} color="bg-white text-indigo-600" icon={TrendingUp} priority="primary" />
+          <StatCard label="Received COD" value={formatPKR(receivedCOD)} sub="Successfully collected this week" color="bg-white text-emerald-600" icon={CheckCircle2} priority="primary" />
+        </div>
+        <div className="col-span-1 md:col-span-6 lg:col-span-4 grid grid-cols-2 gap-4">
+          <StatCard label="Today's Orders" value={todayOrders.length} sub="As of now" color="bg-white text-blue-600" icon={Package} />
+          <StatCard label="Pending Tracking" value={pendingTracking} sub="Without tracking" color="bg-white text-amber-600" icon={Clock} />
+          <StatCard label="Pending COD" value={pendingCOD} sub="Delivered, unpaid" color="bg-white text-orange-600" icon={AlertCircle} />
+          <StatCard label="Void Orders" value={voidOrders} sub="All time" icon={Ban} priority="tertiary" />
+        </div>
       </div>
 
       {/* Quick actions */}
@@ -598,42 +632,41 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
         <Btn variant="secondary" onClick={() => setScreen("cod")}><Banknote size={14} /> Receive COD</Btn>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+      <div className="flex flex-col gap-6">
         {/* Recent Orders */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-50">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
             <h2 className="text-sm font-semibold text-[#0F172A]">Recent Orders</h2>
-            <button onClick={() => setScreen("orders")} className="text-xs text-slate-400 hover:text-[#0F172A] font-medium transition-colors">View all →</button>
+            <button onClick={() => setScreen("orders")} className="text-sm text-slate-500 hover:text-[#0F172A] font-medium transition-colors">View all →</button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[480px]">
-              <thead>
-                <tr className="bg-slate-50/70 text-xs font-medium text-slate-400 uppercase tracking-wide">
-                  <th className="text-left px-5 py-2.5">Order</th>
-                  <th className="text-left px-4 py-2.5">Customer</th>
-                  <th className="text-right px-4 py-2.5">Amount</th>
-                  <th className="text-left px-4 py-2.5">By</th>
-                  <th className="text-left px-4 py-2.5">Status</th>
-                  <th className="text-left px-4 py-2.5">Date</th>
+          <div className="overflow-x-auto flex-1 scrollbar-hide">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+                <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  <th className="text-left px-6 py-3 whitespace-nowrap">Order ID</th>
+                  <th className="text-left px-6 py-3">Customer</th>
+                  <th className="text-right px-6 py-3">Amount</th>
+                  <th className="text-left px-6 py-3">Agent</th>
+                  <th className="text-left px-6 py-3">Status</th>
+                  <th className="text-left px-6 py-3">Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-slate-100">
                 {orders.slice(0, 6).map(o => (
-                  <tr key={o.id} className="hover:bg-slate-50/60 cursor-pointer transition-colors"
-                    onClick={() => onViewOrder(o.id)}>
-                    <td className="px-5 py-3 font-mono text-[11px] font-semibold text-[#0F172A]">{o.id}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-xs text-[#0F172A]">{o.customer}</div>
-                      <div className="text-[11px] text-slate-400">{o.city}</div>
+                  <tr key={o.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => onViewOrder(o.id)}>
+                    <td className="px-6 py-4 font-mono text-xs font-medium text-slate-900 group-hover:text-[#0F172A]">{o.id}</td>
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-sm text-slate-900">{o.customer}</div>
+                      <div className="text-xs text-slate-500">{o.city}</div>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs font-semibold text-[#0F172A]">{formatPKR(o.amount)}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium",
-                        o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700" : "bg-purple-50 text-purple-700"
+                    <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(o.amount)}</td>
+                    <td className="px-6 py-4">
+                      <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-medium tracking-wide",
+                        o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
                       )}>{o.handledBy}</span>
                     </td>
-                    <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{o.date}</td>
+                    <td className="px-6 py-4"><StatusBadge status={o.status} /></td>
+                    <td className="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{o.date}</td>
                   </tr>
                 ))}
               </tbody>
@@ -642,29 +675,28 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
         </div>
 
         {/* Recent COD */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-50">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
             <h2 className="text-sm font-semibold text-[#0F172A]">Recent COD</h2>
-            <button onClick={() => setScreen("cod")} className="text-xs text-slate-400 hover:text-[#0F172A] font-medium transition-colors">View all →</button>
+            <button onClick={() => setScreen("cod")} className="text-sm text-slate-500 hover:text-[#0F172A] font-medium transition-colors">View all →</button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[400px]">
-              <thead>
-                <tr className="bg-slate-50/70 text-xs font-medium text-slate-400 uppercase tracking-wide">
-                  <th className="text-left px-5 py-2.5">Order</th>
-                  <th className="text-right px-4 py-2.5">Amount</th>
-                  <th className="text-left px-4 py-2.5">Status</th>
-                  <th className="text-left px-4 py-2.5">Received Date</th>
+          <div className="overflow-x-auto flex-1 scrollbar-hide">
+            <table className="w-full text-sm min-w-[500px]">
+              <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+                <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  <th className="text-left px-6 py-3 whitespace-nowrap">Order ID</th>
+                  <th className="text-right px-6 py-3">Amount</th>
+                  <th className="text-left px-6 py-3">Status</th>
+                  <th className="text-left px-6 py-3">Received Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-slate-100">
                 {orders.filter(o => o.status === "delivered" || o.codStatus === "received").slice(0, 6).map(o => (
-                  <tr key={o.id} className="hover:bg-slate-50/60 cursor-pointer transition-colors"
-                    onClick={() => onViewOrder(o.id)}>
-                    <td className="px-5 py-3 font-mono text-[11px] font-semibold text-[#0F172A]">{o.id}</td>
-                    <td className="px-4 py-3 text-right font-mono text-xs font-semibold text-[#0F172A]">{formatPKR(o.amount)}</td>
-                    <td className="px-4 py-3"><StatusBadge status={o.codStatus} /></td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{o.receivedDate || "—"}</td>
+                  <tr key={o.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => onViewOrder(o.id)}>
+                    <td className="px-6 py-4 font-mono text-xs font-medium text-slate-900 group-hover:text-[#0F172A]">{o.id}</td>
+                    <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(o.amount)}</td>
+                    <td className="px-6 py-4"><StatusBadge status={o.codStatus} /></td>
+                    <td className="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{o.receivedDate || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -674,15 +706,15 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
       </div>
 
       {/* Weekly chart */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sm:p-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-sm font-semibold text-[#0F172A]">Weekly Performance</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Jun 14 – Jun 20, 2026</p>
+            <p className="text-sm text-slate-500 mt-1">Jun 14 – Jun 20, 2026</p>
           </div>
-          <div className="flex items-center gap-4 text-xs text-slate-400">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-[#0F172A] inline-block rounded" /> Orders</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-[#D4AF37] inline-block rounded" /> Revenue</span>
+          <div className="flex items-center gap-6 text-sm text-slate-500">
+            <span className="flex items-center gap-2 font-medium"><span className="w-3 h-3 bg-[#0F172A] rounded-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)]" /> Orders</span>
+            <span className="flex items-center gap-2 font-medium"><span className="w-3 h-3 bg-[#D4AF37] rounded-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]" /> Revenue</span>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -736,9 +768,11 @@ function CreateOrderScreen({
   const [whatsapp, setWhatsapp] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [altPhone, setAltPhone] = useState("");
+  const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
   const [orderType, setOrderType] = useState<"COD" | "NON-COD">("COD");
+  const [deliveryCharges, setDeliveryCharges] = useState<number>(0);
   const [notes, setNotes] = useState("");
   const [products, setProducts] = useState([{ name: "", qty: 1, price: 0 }]);
   const [saved, setSaved] = useState(false);
@@ -755,9 +789,11 @@ function CreateOrderScreen({
         setWhatsapp(o.whatsapp);
         setCustomerName(o.customer);
         setAltPhone(o.whatsapp === o.whatsapp ? "" : ""); // Keep alternate placeholder
+        setProvince(o.province || "");
         setCity(o.city);
         setAddress(o.address);
         setOrderType(o.type);
+        setDeliveryCharges(o.deliveryCharges || 0);
         setNotes(o.notes || "");
         setProducts(o.products.map(p => ({ ...p })));
       }
@@ -767,12 +803,14 @@ function CreateOrderScreen({
   useEffect(() => {
     if (existing && !editOrderId) {
       setCustomerName(existing.customer);
+      setProvince(existing.province || "");
       setCity(existing.city);
       setAddress(existing.address);
     }
   }, [existing?.whatsapp, editOrderId]);
 
   const subtotal = products.reduce((s, p) => s + p.qty * p.price, 0);
+  const grandTotal = subtotal + deliveryCharges;
   const orderIdToSave = editOrderId || `HKF-2026-${String(orders.length + 148).padStart(6, "0")}`;
 
   const addProduct = () => setProducts(p => [...p, { name: "", qty: 1, price: 0 }]);
@@ -807,15 +845,17 @@ function CreateOrderScreen({
       id: orderIdToSave,
       customer: customerName,
       whatsapp: whatsapp,
+      province: province,
       city: city,
       address: address,
-      amount: subtotal,
+      amount: grandTotal,
       handledBy: handledBy,
       status: editOrderId ? (orders.find(item => item.id === editOrderId)?.status || "pending") : "pending",
       codStatus: editOrderId ? (orders.find(item => item.id === editOrderId)?.codStatus || "pending") : "pending",
       date: editOrderId ? (orders.find(item => item.id === editOrderId)?.date || "2026-06-20") : "2026-06-20",
       products: products,
       type: orderType,
+      deliveryCharges: deliveryCharges,
       notes: notes,
       courier: editOrderId ? orders.find(item => item.id === editOrderId)?.courier : undefined,
       trackingNo: editOrderId ? orders.find(item => item.id === editOrderId)?.trackingNo : undefined,
@@ -856,10 +896,10 @@ function CreateOrderScreen({
           {(["Sami", "Abid"] as const).map(name => (
             <button key={name} onClick={() => setHandledBy(name)}
               className={cn(
-                "px-5 py-2.5 rounded-lg text-sm font-semibold border-2 transition-all",
+                "px-6 py-2.5 rounded-lg text-sm font-semibold border transition-all",
                 handledBy === name
-                  ? "bg-[#0F172A] text-white border-[#0F172A]"
-                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                  ? "bg-[#0F172A] text-white border-[#0F172A] shadow-md shadow-[#0F172A]/10"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
               )}>
               {name}
             </button>
@@ -904,16 +944,29 @@ function CreateOrderScreen({
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <FieldInput label="Customer Name" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Full name" />
           <FieldInput label="Alternate Number" value={altPhone} onChange={e => setAltPhone(e.target.value)} placeholder="Optional" className="font-mono" />
-          <FieldSelect label="City" value={city} onChange={e => setCity(e.target.value)}>
-            <option value="">Select City</option>
-            {["Lahore","Karachi","Islamabad","Faisalabad","Rawalpindi","Peshawar","Multan","Quetta","Hyderabad","Sialkot"].map(c => (
-              <option key={c}>{c}</option>
-            ))}
+          <FieldSelect label="Province" value={province} onChange={e => { setProvince(e.target.value); setCity(""); }}>
+            <option value="">Select Province</option>
+            {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
           </FieldSelect>
-          <FieldInput label="Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="Complete delivery address" />
+          <div className="flex flex-col gap-1.5">
+            <label className="block text-sm font-medium text-slate-700">City <span className="text-red-500">*</span></label>
+            <input
+              list="pakistan-cities"
+              value={city}
+              onChange={e => setCity(e.target.value)}
+              placeholder="Select or type city..."
+              className="block w-full rounded-md border-0 py-2 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] sm:text-sm sm:leading-6 transition-all duration-200"
+            />
+            <datalist id="pakistan-cities">
+              {(province ? PROVINCE_CITIES[province] : Object.values(PROVINCE_CITIES).flat().sort()).map(c => <option key={c} value={c} />)}
+            </datalist>
+          </div>
+          <div className="sm:col-span-2 lg:col-span-2">
+            <FieldInput label="Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="Complete delivery address" required />
+          </div>
         </div>
       </div>
 
@@ -924,7 +977,7 @@ function CreateOrderScreen({
           <Btn size="sm" variant="secondary" onClick={addProduct}><Plus size={13} /> Add Row</Btn>
         </div>
 
-        <div className="hidden sm:grid grid-cols-12 gap-2 text-xs font-medium text-slate-400 uppercase tracking-wide px-1 mb-2">
+        <div className="hidden sm:grid grid-cols-12 gap-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-1 mb-2">
           <div className="col-span-5">Product Name</div>
           <div className="col-span-2 text-center">Qty</div>
           <div className="col-span-3 text-right">Unit Price</div>
@@ -966,36 +1019,44 @@ function CreateOrderScreen({
       {/* Order Summary */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
         <h3 className="text-sm font-semibold text-[#0F172A] mb-4">Order Summary</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
-            <div className="space-y-2 text-sm">
+            <div className="space-y-3 text-sm">
               <div className="flex justify-between text-slate-500">
                 <span>Subtotal</span>
                 <span className="font-mono font-medium text-[#0F172A]">{formatPKR(subtotal)}</span>
               </div>
-              <div className="flex justify-between border-t border-slate-100 pt-2.5 font-semibold text-base">
+              <div className="flex justify-between items-center text-slate-500">
+                <span>Delivery Charges (DC)</span>
+                <div className="w-24">
+                  <input type="number" min={0} value={deliveryCharges || ""} onChange={e => setDeliveryCharges(parseInt(e.target.value) || 0)}
+                    placeholder="0"
+                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono transition-colors" />
+                </div>
+              </div>
+              <div className="flex justify-between border-t border-slate-100 pt-3 font-semibold text-base">
                 <span>Grand Total</span>
-                <span className="font-mono text-[#D4AF37]">{formatPKR(subtotal)}</span>
+                <span className="font-mono text-[#D4AF37]">{formatPKR(grandTotal)}</span>
               </div>
             </div>
-            <div className="mt-5">
-              <label className="text-sm font-medium text-slate-700 mb-2 block">Order Type</label>
-              <div className="flex gap-4">
+            <div className="mt-6">
+              <label className="text-sm font-medium text-slate-700 mb-2.5 block">Order Type</label>
+              <div className="flex gap-5">
                 {(["COD", "NON-COD"] as const).map(t => (
-                  <label key={t} className="flex items-center gap-2 cursor-pointer">
+                  <label key={t} className="flex items-center gap-2.5 cursor-pointer group">
                     <input type="radio" name="orderType" value={t} checked={orderType === t}
-                      onChange={() => setOrderType(t)} className="w-4 h-4 accent-[#0F172A]" />
-                    <span className="text-sm font-medium text-slate-700">{t}</span>
+                      onChange={() => setOrderType(t)} className="w-4 h-4 accent-[#0F172A] cursor-pointer" />
+                    <span className="text-sm font-medium text-slate-700 group-hover:text-[#0F172A] transition-colors">{t}</span>
                   </label>
                 ))}
               </div>
             </div>
           </div>
           <div>
-            <label className="text-sm font-medium text-slate-700 mb-1 block">Notes</label>
+            <label className="text-sm font-medium text-slate-700 mb-1.5 block">Notes</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4}
               placeholder="Special instructions, fragile items, call before delivery..."
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] resize-none transition-colors" />
+              className="w-full px-3.5 py-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] resize-none transition-colors" />
           </div>
         </div>
       </div>
@@ -1025,11 +1086,18 @@ function CreateOrderScreen({
             <div className="flex justify-between"><span className="text-slate-400">Handled By:</span><span>{handledBy}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Customer:</span><span>{customerName || "—"}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">WhatsApp:</span><span>{whatsapp || "—"}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Province:</span><span>{province || "—"}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">City:</span><span>{city || "—"}</span></div>
             <div className="pt-1"><span className="text-slate-400">Address: </span><span>{address || "—"}</span></div>
+            {deliveryCharges > 0 && (
+              <div className="flex justify-between pt-1 text-xs">
+                <span className="text-slate-400">Delivery Charges:</span>
+                <span className="font-mono font-medium">{formatPKR(deliveryCharges)}</span>
+              </div>
+            )}
             <div className="flex justify-between border-t border-slate-200 pt-2 mt-2">
-              <span className="font-bold text-sm">COD:</span>
-              <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(subtotal)}</span>
+              <span className="font-bold text-sm">{orderType === "COD" ? "COD Amount:" : "Total Amount:"}</span>
+              <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(grandTotal)}</span>
             </div>
           </div>
           <div className="mt-3 flex justify-center">
@@ -1139,12 +1207,12 @@ function OrdersScreen({
       </div>
 
       {/* Date tabs */}
-      <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit flex-wrap">
+      <div className="flex gap-1 bg-slate-100/50 rounded-lg p-1 w-fit flex-wrap border border-slate-200/50">
         {["today", "week", "month", "year", "custom"].map(f => (
           <button key={f} onClick={() => setDateFilter(f)}
             className={cn(
-              "px-3 py-1.5 rounded-md text-xs font-medium transition-all capitalize",
-              dateFilter === f ? "bg-white text-[#0F172A] shadow-sm" : "text-slate-500 hover:text-slate-700"
+              "px-3.5 py-1.5 rounded-md text-sm font-medium transition-all capitalize",
+              dateFilter === f ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-slate-200/60" : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
             )}>
             {f === "custom" ? "Custom Date" : f}
           </button>
@@ -1162,16 +1230,16 @@ function OrdersScreen({
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-3">
         <select value={handledFilter} onChange={e => setHandledFilter(e.target.value)}
-          className="px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A]">
+          className="px-3.5 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors hover:border-slate-300">
           <option value="all">All Staff</option>
           <option value="Sami">Sami</option>
           <option value="Abid">Abid</option>
         </select>
         
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          className="px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A]">
+          className="px-3.5 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors hover:border-slate-300">
           <option value="all">All Status</option>
           <option value="pending">Pending</option>
           <option value="processing">Processing</option>
@@ -1182,13 +1250,13 @@ function OrdersScreen({
         </select>
 
         <select value={courierFilter} onChange={e => setCourierFilter(e.target.value)}
-          className="px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A]">
+          className="px-3.5 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors hover:border-slate-300">
           <option value="all">All Couriers</option>
           {["TCS","PostEx","Leopard","M&P","Other"].map(c => <option key={c} value={c}>{c}</option>)}
         </select>
 
         <select value={codStatusFilter} onChange={e => setCODStatusFilter(e.target.value)}
-          className="px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A]">
+          className="px-3.5 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors hover:border-slate-300">
           <option value="all">All COD Status</option>
           <option value="pending">Pending</option>
           <option value="received">Received</option>
@@ -1203,18 +1271,18 @@ function OrdersScreen({
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-50">
-          <span className="text-xs text-slate-400 font-medium">{filtered.length} orders</span>
-          <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors">
-            <Download size={12} /> Export
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <span className="text-sm text-slate-500 font-medium">{filtered.length} orders</span>
+          <button className="flex items-center gap-2 text-sm text-slate-500 hover:text-[#0F172A] font-medium transition-colors">
+            <Download size={14} /> Export
           </button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
-            <thead>
-              <tr className="bg-slate-50/70 text-xs font-medium text-slate-400 uppercase tracking-wide">
-                <th className="px-5 py-3 w-10 text-left">
+        <div className="overflow-x-auto flex-1 scrollbar-hide">
+          <table className="w-full text-sm min-w-[800px]">
+            <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+              <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="px-6 py-3 w-14 text-left">
                   <input type="checkbox"
                     checked={filtered.length > 0 && selectedIds.size === filtered.length}
                     onChange={e => {
@@ -1224,24 +1292,24 @@ function OrdersScreen({
                         setSelectedIds(new Set());
                       }
                     }}
-                    className="rounded border-slate-300 accent-[#0F172A]" />
+                    className="rounded border-slate-300 accent-[#0F172A] w-3.5 h-3.5 cursor-pointer" />
                 </th>
-                <th className="text-left px-4 py-3">Order No</th>
-                <th className="text-left px-4 py-3">Customer</th>
-                <th className="text-left px-4 py-3 hidden md:table-cell">WhatsApp</th>
-                <th className="text-right px-4 py-3">Amount</th>
-                <th className="text-left px-4 py-3 hidden sm:table-cell">By</th>
-                <th className="text-left px-4 py-3">Status</th>
-                <th className="text-left px-4 py-3 hidden lg:table-cell">Date</th>
-                <th className="text-right px-4 py-3">Actions</th>
+                <th className="text-left px-6 py-3">Order No</th>
+                <th className="text-left px-6 py-3">Customer</th>
+                <th className="text-left px-6 py-3 hidden md:table-cell">WhatsApp</th>
+                <th className="text-right px-6 py-3">Amount</th>
+                <th className="text-left px-6 py-3 hidden sm:table-cell">Agent</th>
+                <th className="text-left px-6 py-3">Status</th>
+                <th className="text-left px-6 py-3 hidden lg:table-cell">Date</th>
+                <th className="text-right px-6 py-3">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-100">
               {filtered.map(o => {
                 const status = o.status;
                 return (
-                  <tr key={o.id} className="hover:bg-slate-50/60 transition-colors group">
-                    <td className="px-5 py-3 w-10">
+                  <tr key={o.id} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-6 py-4 w-14">
                       <input type="checkbox"
                         checked={selectedIds.has(o.id)}
                         onChange={e => {
@@ -1250,40 +1318,40 @@ function OrdersScreen({
                           else next.delete(o.id);
                           setSelectedIds(next);
                         }}
-                        className="rounded border-slate-300 accent-[#0F172A]" />
+                        className="rounded border-slate-300 accent-[#0F172A] w-3.5 h-3.5 cursor-pointer" />
                     </td>
-                    <td className="px-4 py-3 font-mono text-[11px] font-semibold text-[#0F172A]">{o.id}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-xs text-[#0F172A]">{o.customer}</div>
-                      <div className="text-[11px] text-slate-400">{o.city}</div>
+                    <td className="px-6 py-4 font-mono text-xs font-semibold text-[#0F172A]">{o.id}</td>
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-sm text-slate-900 group-hover:text-[#0F172A] transition-colors cursor-pointer" onClick={() => onViewOrder(o.id)}>{o.customer}</div>
+                      <div className="text-xs text-slate-500">{o.city}</div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-500 hidden md:table-cell">{o.whatsapp}</td>
-                    <td className="px-4 py-3 text-right font-mono text-xs font-semibold text-[#0F172A]">{formatPKR(o.amount)}</td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium",
-                        o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700" : "bg-purple-50 text-purple-700"
+                    <td className="px-6 py-4 font-mono text-xs text-slate-500 hidden md:table-cell">{o.whatsapp}</td>
+                    <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(o.amount)}</td>
+                    <td className="px-6 py-4 hidden sm:table-cell">
+                      <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-medium tracking-wide",
+                        o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
                       )}>{o.handledBy}</span>
                     </td>
-                    <td className="px-4 py-3"><StatusBadge status={status} /></td>
-                    <td className="px-4 py-3 text-xs text-slate-400 hidden lg:table-cell">{o.date}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <td className="px-6 py-4"><StatusBadge status={status} /></td>
+                    <td className="px-6 py-4 text-sm text-slate-500 hidden lg:table-cell whitespace-nowrap">{o.date}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => onViewOrder(o.id)}
-                          className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors" title="View">
-                          <Eye size={13} />
+                          className="p-1.5 rounded-md hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-sm text-slate-400 hover:text-[#0F172A] transition-all" title="View">
+                          <Eye size={14} />
                         </button>
                         <button onClick={() => onEditOrder(o.id)}
-                          className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors" title="Edit">
-                          <Edit2 size={13} />
+                          className="p-1.5 rounded-md hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-sm text-slate-400 hover:text-blue-600 transition-all" title="Edit">
+                          <Edit2 size={14} />
                         </button>
                         <button onClick={() => setPrintOrderId(o.id)}
-                          className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors" title="Print">
-                          <Printer size={13} />
+                          className="p-1.5 rounded-md hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-sm text-slate-400 hover:text-slate-700 transition-all" title="Print">
+                          <Printer size={14} />
                         </button>
                         {status !== "void" && (
                           <button onClick={() => setVoidModal(o.id)}
-                            className="p-1.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors" title="Void">
-                            <Ban size={13} />
+                            className="p-1.5 rounded-md hover:bg-white border border-transparent hover:border-red-200 hover:shadow-sm text-slate-300 hover:text-red-600 transition-all" title="Void">
+                            <Ban size={14} />
                           </button>
                         )}
                       </div>
@@ -1442,17 +1510,17 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
   ];
 
   return (
-    <div className="space-y-5 max-w-4xl pb-8">
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => setScreen("orders")} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors flex-shrink-0">
-          <ArrowLeft size={17} className="text-slate-500" />
+    <div className="space-y-6 max-w-4xl pb-8">
+      <div className="flex items-center gap-4 flex-wrap pb-2 border-b border-slate-100">
+        <button onClick={() => setScreen("orders")} className="p-2 rounded-lg hover:bg-slate-100 transition-colors flex-shrink-0 text-slate-500 hover:text-[#0F172A]">
+          <ArrowLeft size={18} />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-[#0F172A] font-mono">{o.id}</h1>
-          <p className="text-xs text-slate-400 mt-0.5">{o.date} · Handled by {o.handledBy}</p>
+          <h1 className="text-2xl font-bold text-[#0F172A] font-mono tracking-tight">{o.id}</h1>
+          <p className="text-sm text-slate-500 mt-1 font-medium">{o.date} <span className="mx-1 text-slate-300">•</span> Handled by {o.handledBy}</p>
         </div>
         <StatusBadge status={o.status} />
-        <Btn size="sm" variant="secondary" onClick={() => setShowPrint(true)}><Printer size={13} /> Print Label</Btn>
+        <Btn size="md" variant="secondary" onClick={() => setShowPrint(true)} className="ml-2"><Printer size={14} /> Print Label</Btn>
       </div>
 
       {/* Label Print Modal */}
@@ -1469,10 +1537,17 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
             <div className="flex justify-between"><span className="text-slate-400">Handled By:</span><span>{o.handledBy}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Customer:</span><span>{o.customer}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">WhatsApp:</span><span>{o.whatsapp}</span></div>
+            {o.province && <div className="flex justify-between"><span className="text-slate-400">Province:</span><span>{o.province}</span></div>}
             <div className="flex justify-between"><span className="text-slate-400">City:</span><span>{o.city}</span></div>
             <div className="pt-1"><span className="text-slate-400">Address: </span><span>{o.address}</span></div>
+            {o.deliveryCharges && o.deliveryCharges > 0 ? (
+              <div className="flex justify-between pt-1 text-xs">
+                <span className="text-slate-400">Delivery Charges:</span>
+                <span className="font-mono font-medium">{formatPKR(o.deliveryCharges)}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between border-t border-slate-200 pt-2 mt-2">
-              <span className="font-bold text-sm">COD:</span>
+              <span className="font-bold text-sm">{o.type === "COD" ? "COD Amount:" : "Total Amount:"}</span>
               <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(o.amount)}</span>
             </div>
           </div>
@@ -1488,99 +1563,111 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
         </div>
       </Modal>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
           {/* Customer */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
-              <User size={14} /> Customer
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-sm font-semibold text-[#0F172A] mb-5 flex items-center gap-2">
+              <User size={15} className="text-slate-400" /> Customer Information
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-4 text-sm">
               {[
                 ["Name", o.customer],
                 ["WhatsApp", o.whatsapp],
+                ["Province", o.province || "—"],
                 ["City", o.city],
                 ["Address", o.address],
               ].map(([label, val]) => (
                 <div key={label}>
-                  <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-0.5">{label}</div>
-                  <div className={cn("text-[#0F172A] text-sm", label === "WhatsApp" ? "font-mono" : "font-medium")}>{val}</div>
+                  <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</div>
+                  <div className={cn("text-slate-900 text-sm font-medium", label === "WhatsApp" && "font-mono")}>{val}</div>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Products */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-[#0F172A] mb-4 flex items-center gap-2"><Package size={14} /> Products</h3>
-            <div className="space-y-1">
-              {o.products.map((p, i) => (
-                <div key={i} className="flex items-center justify-between py-2.5 border-b border-slate-50 last:border-0">
-                  <div>
-                    <div className="text-sm font-medium text-[#0F172A]">{p.name}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">Qty: {p.qty} × {formatPKR(p.price)}</div>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-sm font-semibold text-[#0F172A] flex items-center gap-2"><Package size={15} className="text-slate-400" /> Order Items</h3>
+            </div>
+            <div className="p-6">
+              <div className="space-y-1">
+                {o.products.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50/50 -mx-6 px-6 transition-colors">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">{p.name}</div>
+                      <div className="text-xs text-slate-500 mt-1">Qty: {p.qty} × {formatPKR(p.price)}</div>
+                    </div>
+                    <span className="font-mono text-sm font-semibold text-[#0F172A]">{formatPKR(p.qty * p.price)}</span>
                   </div>
-                  <span className="font-mono text-sm font-semibold text-[#0F172A]">{formatPKR(p.qty * p.price)}</span>
+                ))}
+                {o.deliveryCharges && o.deliveryCharges > 0 && (
+                  <div className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0 -mx-6 px-6 transition-colors">
+                    <div className="text-sm font-medium text-slate-900">Delivery Charges</div>
+                    <span className="font-mono text-sm font-semibold text-[#0F172A]">{formatPKR(o.deliveryCharges)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-5 mt-2 font-semibold">
+                  <span className="text-sm text-slate-600">Grand Total</span>
+                  <span className="font-mono text-[#D4AF37] text-xl">{formatPKR(o.amount)}</span>
                 </div>
-              ))}
-              <div className="flex justify-between items-center pt-3 font-semibold">
-                <span className="text-sm text-slate-600">Grand Total</span>
-                <span className="font-mono text-[#D4AF37] text-lg">{formatPKR(o.amount)}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-6">
           {/* Tracking */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-[#0F172A] mb-3 flex items-center gap-2"><Truck size={14} /> Tracking</h3>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-sm font-semibold text-[#0F172A] mb-4 flex items-center gap-2"><Truck size={15} className="text-slate-400" /> Tracking</h3>
             {o.trackingNo ? (
-              <div className="space-y-3 text-sm">
+              <div className="space-y-4 text-sm">
                 <div>
-                  <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-0.5">Courier</div>
-                  <div className="font-semibold text-[#0F172A]">{o.courier}</div>
+                  <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Courier</div>
+                  <div className="font-medium text-slate-900">{o.courier}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-0.5">Tracking No</div>
-                  <div className="font-mono text-[#0F172A] text-xs bg-slate-50 px-2 py-1.5 rounded">{o.trackingNo}</div>
+                  <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Tracking No</div>
+                  <div className="font-mono text-[#0F172A] text-sm bg-slate-50 px-2.5 py-1.5 rounded-md border border-slate-200 inline-block">{o.trackingNo}</div>
                 </div>
               </div>
             ) : (
-              <div className="text-center py-4">
+              <div className="text-center py-6 border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
                 <Clock size={24} className="mx-auto mb-2 text-slate-300" />
-                <div className="text-xs text-slate-400">No tracking added yet</div>
+                <div className="text-xs font-medium text-slate-500">No tracking added yet</div>
               </div>
             )}
           </div>
 
           {/* COD */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-[#0F172A] mb-3 flex items-center gap-2"><Banknote size={14} /> COD</h3>
-            <div className="space-y-3 text-sm">
-              <div><div className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-0.5">Type</div><div className="font-semibold text-[#0F172A]">{o.type}</div></div>
-              <div><div className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-0.5">Amount</div><div className="font-mono font-bold text-[#D4AF37] text-base">{formatPKR(o.amount)}</div></div>
-              <div><div className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-0.5">Status</div><StatusBadge status={o.codStatus} /></div>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-sm font-semibold text-[#0F172A] mb-4 flex items-center gap-2"><Banknote size={15} className="text-slate-400" /> COD Details</h3>
+            <div className="space-y-4 text-sm">
+              <div><div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Type</div><div className="font-medium text-slate-900">{o.type}</div></div>
+              <div><div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Amount</div><div className="font-mono font-bold text-[#D4AF37] text-lg">{formatPKR(o.amount)}</div></div>
+              <div><div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Status</div><div className="mt-1"><StatusBadge status={o.codStatus} /></div></div>
             </div>
           </div>
 
           {/* Timeline */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-[#0F172A] mb-4">Timeline</h3>
-            <div className="space-y-3">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-sm font-semibold text-[#0F172A] mb-5">Timeline</h3>
+            <div className="space-y-4 relative">
+              <div className="absolute left-[9px] top-2 bottom-2 w-0.5 bg-slate-100" />
               {timeline.map((step, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className={cn("w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors",
-                    step.done ? "bg-green-100" : "bg-slate-100"
+                <div key={i} className="flex items-start gap-4 relative z-10">
+                  <div className={cn("w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ring-4 ring-white",
+                    step.done ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 border border-slate-200"
                   )}>
                     {step.done
-                      ? <Check size={11} className="text-green-600" />
+                      ? <Check size={12} strokeWidth={3} />
                       : <div className="w-2 h-2 rounded-full bg-slate-300" />
                     }
                   </div>
                   <div className="flex-1">
-                    <div className={cn("text-sm font-medium", step.done ? "text-[#0F172A]" : "text-slate-400")}>{step.label}</div>
-                    {step.date && <div className="text-xs text-slate-400 mt-0.5">{step.date}</div>}
+                    <div className={cn("text-sm font-semibold", step.done ? "text-slate-900" : "text-slate-400")}>{step.label}</div>
+                    {step.date && <div className="text-xs text-slate-500 mt-0.5">{step.date}</div>}
                   </div>
                 </div>
               ))}
@@ -1634,61 +1721,61 @@ function TrackingScreen({ orders, onSaveTracking }: { orders: Order[]; onSaveTra
       </div>
 
       {tab === "awaiting" && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           {awaiting.length === 0 ? (
-            <div className="py-16 text-center">
-              <CheckCircle2 size={32} className="mx-auto mb-2 text-green-400" />
-              <div className="text-sm text-slate-400">All orders have tracking numbers ✓</div>
+            <div className="py-20 text-center">
+              <CheckCircle2 size={36} className="mx-auto mb-3 text-emerald-500" />
+              <div className="text-sm font-medium text-slate-500">All orders have tracking numbers ✓</div>
             </div>
           ) : (
             <>
               {/* Desktop Table View */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden md:block overflow-x-auto flex-1">
                 <table className="w-full text-sm min-w-[720px]">
-                  <thead>
-                    <tr className="bg-slate-50/70 text-xs font-medium text-slate-400 uppercase tracking-wide">
-                      <th className="text-left px-5 py-3">Order No</th>
-                      <th className="text-left px-4 py-3">Customer</th>
-                      <th className="text-right px-4 py-3 hidden md:table-cell">Amount</th>
-                      <th className="text-left px-4 py-3 w-36">Courier</th>
-                      <th className="text-left px-4 py-3">Tracking No</th>
-                      <th className="text-left px-4 py-3 w-40">Receipt Upload</th>
-                      <th className="px-4 py-3 w-24"></th>
+                  <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+                    <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                      <th className="text-left px-6 py-3">Order No</th>
+                      <th className="text-left px-6 py-3">Customer</th>
+                      <th className="text-right px-6 py-3 hidden md:table-cell">Amount</th>
+                      <th className="text-left px-6 py-3 w-40">Courier</th>
+                      <th className="text-left px-6 py-3">Tracking No</th>
+                      <th className="text-left px-6 py-3 w-44">Receipt Upload</th>
+                      <th className="px-6 py-3 w-28"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-slate-100">
                     {awaiting.map(o => (
-                      <tr key={o.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-5 py-3 font-mono text-[11px] font-semibold text-[#0F172A]">{o.id}</td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-xs text-[#0F172A]">{o.customer}</div>
-                          <div className="text-[11px] text-slate-400">{o.city}</div>
+                      <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 font-mono text-xs font-semibold text-[#0F172A]">{o.id}</td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-sm text-slate-900">{o.customer}</div>
+                          <div className="text-xs text-slate-500">{o.city}</div>
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs font-semibold text-right hidden md:table-cell">{formatPKR(o.amount)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-6 py-4 font-mono text-sm font-medium text-slate-900 text-right hidden md:table-cell">{formatPKR(o.amount)}</td>
+                        <td className="px-6 py-4">
                           <select value={inputs[o.id]?.courier || ""}
                             onChange={e => set(o.id, "courier", e.target.value)}
-                            className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20">
+                            className="w-full px-2.5 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 transition-colors">
                             <option value="">Select</option>
                             {["TCS","PostEx","Leopard","M&P","Other"].map(c => <option key={c}>{c}</option>)}
                           </select>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-6 py-4">
                           <input value={inputs[o.id]?.no || ""}
                             onChange={e => set(o.id, "no", e.target.value)}
-                            placeholder="Enter tracking number"
-                            className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono" />
+                            placeholder="Tracking number"
+                            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors" />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-6 py-4">
                           <input type="file" accept="image/*"
                             onChange={() => set(o.id, "receiptUploaded", "true")}
-                            className="w-full text-[11px] text-slate-500 file:mr-1 file:py-1 file:px-1.5 file:rounded file:border-0 file:bg-slate-100 file:text-slate-700" />
+                            className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:bg-slate-100 file:text-slate-700 file:font-medium hover:file:bg-slate-200 transition-colors cursor-pointer" />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-6 py-4">
                           <Btn size="sm"
                             disabled={!inputs[o.id]?.courier || !inputs[o.id]?.no}
                             onClick={() => handleSave(o.id)}>
-                            <Save size={12} /> Save
+                            <Save size={14} /> Save
                           </Btn>
                         </td>
                       </tr>
@@ -1747,31 +1834,31 @@ function TrackingScreen({ orders, onSaveTracking }: { orders: Order[]; onSaveTra
       )}
 
       {tab === "added" && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[560px]">
-              <thead>
-                <tr className="bg-slate-50/70 text-xs font-medium text-slate-400 uppercase tracking-wide">
-                  <th className="text-left px-5 py-3">Order No</th>
-                  <th className="text-left px-4 py-3">Customer</th>
-                  <th className="text-left px-4 py-3">Courier</th>
-                  <th className="text-left px-4 py-3">Tracking No</th>
-                  <th className="text-left px-4 py-3">Status</th>
-                  <th className="text-right px-4 py-3 hidden md:table-cell">Amount</th>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="overflow-x-auto flex-1">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+                <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  <th className="text-left px-6 py-3">Order No</th>
+                  <th className="text-left px-6 py-3">Customer</th>
+                  <th className="text-left px-6 py-3">Courier</th>
+                  <th className="text-left px-6 py-3">Tracking No</th>
+                  <th className="text-left px-6 py-3">Status</th>
+                  <th className="text-right px-6 py-3 hidden md:table-cell">Amount</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-slate-100">
                 {added.map(o => (
-                  <tr key={o.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-3 font-mono text-[11px] font-semibold text-[#0F172A]">{o.id}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-xs text-[#0F172A]">{o.customer}</div>
-                      <div className="text-[11px] text-slate-400">{o.city}</div>
+                  <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 font-mono text-xs font-semibold text-[#0F172A]">{o.id}</td>
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-sm text-slate-900">{o.customer}</div>
+                      <div className="text-xs text-slate-500">{o.city}</div>
                     </td>
-                    <td className="px-4 py-3 text-xs font-medium text-slate-600">{o.courier || "—"}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{o.trackingNo || "—"}</td>
-                    <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
-                    <td className="px-4 py-3 font-mono text-xs font-semibold text-right hidden md:table-cell">{formatPKR(o.amount)}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-slate-700">{o.courier || "—"}</td>
+                    <td className="px-6 py-4 font-mono text-sm text-slate-700">{o.trackingNo || "—"}</td>
+                    <td className="px-6 py-4"><StatusBadge status={o.status} /></td>
+                    <td className="px-6 py-4 font-mono text-sm font-medium text-slate-900 text-right hidden md:table-cell">{formatPKR(o.amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1830,46 +1917,46 @@ function CODScreen({ orders, onReceiveCOD }: { orders: Order[]; onReceiveCOD: (i
       </div>
 
       {/* Pending table */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-50">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-100 flex-shrink-0">
           <h2 className="text-sm font-semibold text-[#0F172A]">Pending COD — Awaiting Receipt</h2>
         </div>
         {pending.length === 0 ? (
-          <div className="py-12 text-center">
-            <CheckCircle2 size={32} className="mx-auto mb-2 text-green-400" />
-            <div className="text-sm text-slate-400">All COD received!</div>
+          <div className="py-20 text-center">
+            <CheckCircle2 size={36} className="mx-auto mb-3 text-emerald-500" />
+            <div className="text-sm font-medium text-slate-500">All COD received!</div>
           </div>
         ) : (
           <>
             {/* Desktop View */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm min-w-[540px]">
-                <thead>
-                  <tr className="bg-slate-50/70 text-xs font-medium text-slate-400 uppercase tracking-wide">
-                    <th className="text-left px-5 py-3">Order No</th>
-                    <th className="text-left px-4 py-3">Customer</th>
-                    <th className="text-left px-4 py-3 hidden md:table-cell">Tracking</th>
-                    <th className="text-right px-4 py-3">Amount</th>
-                    <th className="text-left px-4 py-3 hidden sm:table-cell">Courier</th>
-                    <th className="text-left px-4 py-3">Status</th>
-                    <th className="text-right px-5 py-3">Action</th>
+            <div className="hidden md:block overflow-x-auto flex-1">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+                  <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    <th className="text-left px-6 py-3">Order No</th>
+                    <th className="text-left px-6 py-3">Customer</th>
+                    <th className="text-left px-6 py-3 hidden md:table-cell">Tracking</th>
+                    <th className="text-right px-6 py-3">Amount</th>
+                    <th className="text-left px-6 py-3 hidden sm:table-cell">Courier</th>
+                    <th className="text-left px-6 py-3">Status</th>
+                    <th className="text-right px-6 py-3">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-100">
                   {pending.map(o => (
-                    <tr key={o.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-5 py-3 font-mono text-[11px] font-semibold text-[#0F172A]">{o.id}</td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-xs text-[#0F172A]">{o.customer}</div>
-                        <div className="text-[11px] text-slate-400">{o.city}</div>
+                    <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 font-mono text-xs font-semibold text-[#0F172A]">{o.id}</td>
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-sm text-slate-900">{o.customer}</div>
+                        <div className="text-xs text-slate-500">{o.city}</div>
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-400 hidden md:table-cell">{o.trackingNo || "—"}</td>
-                      <td className="px-4 py-3 text-right font-mono text-sm font-bold text-[#0F172A]">{formatPKR(o.amount)}</td>
-                      <td className="px-4 py-3 text-xs text-slate-500 hidden sm:table-cell">{o.courier || "—"}</td>
-                      <td className="px-4 py-3"><StatusBadge status={o.codStatus} /></td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-6 py-4 font-mono text-xs text-slate-500 hidden md:table-cell">{o.trackingNo || "—"}</td>
+                      <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(o.amount)}</td>
+                      <td className="px-6 py-4 text-sm font-medium text-slate-700 hidden sm:table-cell">{o.courier || "—"}</td>
+                      <td className="px-6 py-4"><StatusBadge status={o.codStatus} /></td>
+                      <td className="px-6 py-4 text-right">
                         <Btn size="sm" onClick={() => setReceiveModal(o.id)}>
-                          <Banknote size={12} /> Receive
+                          <Banknote size={14} /> Receive
                         </Btn>
                       </td>
                     </tr>
@@ -1903,29 +1990,29 @@ function CODScreen({ orders, onReceiveCOD }: { orders: Order[]; onReceiveCOD: (i
       </div>
 
       {/* Received table */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-50">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-100 flex-shrink-0">
           <h2 className="text-sm font-semibold text-[#0F172A]">Received COD</h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[480px]">
-            <thead>
-              <tr className="bg-slate-50/70 text-xs font-medium text-slate-400 uppercase tracking-wide">
-                <th className="text-left px-5 py-3">Order No</th>
-                <th className="text-left px-4 py-3">Customer</th>
-                <th className="text-right px-4 py-3">Amount</th>
-                <th className="text-left px-4 py-3 hidden sm:table-cell">Courier</th>
-                <th className="text-left px-4 py-3">Status</th>
+        <div className="overflow-x-auto flex-1">
+          <table className="w-full text-sm min-w-[500px]">
+            <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+              <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="text-left px-6 py-3">Order No</th>
+                <th className="text-left px-6 py-3">Customer</th>
+                <th className="text-right px-6 py-3">Amount</th>
+                <th className="text-left px-6 py-3 hidden sm:table-cell">Courier</th>
+                <th className="text-left px-6 py-3">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-100">
               {receivedList.map(o => (
-                <tr key={o.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-5 py-3 font-mono text-[11px] font-semibold text-[#0F172A]">{o.id}</td>
-                  <td className="px-4 py-3 text-xs text-slate-600">{o.customer}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs font-semibold text-[#0F172A]">{formatPKR(o.amount)}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500 hidden sm:table-cell">{o.courier || "—"}</td>
-                  <td className="px-4 py-3"><StatusBadge status="received" /></td>
+                <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 font-mono text-xs font-semibold text-[#0F172A]">{o.id}</td>
+                  <td className="px-6 py-4 text-sm text-slate-900 font-medium">{o.customer}</td>
+                  <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(o.amount)}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-slate-700 hidden sm:table-cell">{o.courier || "—"}</td>
+                  <td className="px-6 py-4"><StatusBadge status="received" /></td>
                 </tr>
               ))}
             </tbody>
@@ -2011,35 +2098,35 @@ function SettlementsScreen() {
 
       {uploaded && (
         <>
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
               <h2 className="text-sm font-semibold text-[#0F172A]">Settlement Preview</h2>
               <div className="flex gap-2">
-                <span className="px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded">3 matched</span>
-                <span className="px-2 py-0.5 bg-red-50 text-red-600 text-xs font-medium rounded">1 unmatched</span>
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[11px] font-semibold tracking-wide rounded-md ring-1 ring-inset ring-emerald-600/20">3 matched</span>
+                <span className="px-2.5 py-1 bg-rose-50 text-rose-700 text-[11px] font-semibold tracking-wide rounded-md ring-1 ring-inset ring-rose-600/20">1 unmatched</span>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[480px]">
-                <thead>
-                  <tr className="bg-slate-50/70 text-xs font-medium text-slate-400 uppercase tracking-wide">
-                    <th className="text-left px-5 py-3">Tracking No</th>
-                    <th className="text-right px-4 py-3">Amount</th>
-                    <th className="text-left px-4 py-3">Matched Order</th>
-                    <th className="text-left px-4 py-3">Status</th>
+            <div className="overflow-x-auto flex-1">
+              <table className="w-full text-sm min-w-[500px]">
+                <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+                  <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    <th className="text-left px-6 py-3">Tracking No</th>
+                    <th className="text-right px-6 py-3">Amount</th>
+                    <th className="text-left px-6 py-3">Matched Order</th>
+                    <th className="text-left px-6 py-3">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-100">
                   {preview.map((row, i) => (
-                    <tr key={i} className={cn("hover:bg-slate-50/50", row.status === "unmatched" && "bg-red-50/30")}>
-                      <td className="px-5 py-3 font-mono text-xs text-[#0F172A]">{row.tracking}</td>
-                      <td className="px-4 py-3 text-right font-mono text-xs font-semibold">{formatPKR(row.amount)}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{row.matched || "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={cn("px-2 py-0.5 rounded text-xs font-medium",
-                          row.status === "matched" ? "bg-green-50 text-green-700" :
-                          row.status === "pending" ? "bg-amber-50 text-amber-700" :
-                          "bg-red-50 text-red-600"
+                    <tr key={i} className={cn("hover:bg-slate-50 transition-colors", row.status === "unmatched" && "bg-rose-50/30")}>
+                      <td className="px-6 py-4 font-mono text-xs font-semibold text-[#0F172A]">{row.tracking}</td>
+                      <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(row.amount)}</td>
+                      <td className="px-6 py-4 font-mono text-sm text-slate-700">{row.matched || "—"}</td>
+                      <td className="px-6 py-4">
+                        <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide ring-1 ring-inset",
+                          row.status === "matched" ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20" :
+                          row.status === "pending" ? "bg-amber-50 text-amber-700 ring-amber-600/20" :
+                          "bg-rose-50 text-rose-700 ring-rose-600/20"
                         )}>
                           {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
                         </span>
@@ -2132,26 +2219,28 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Orders", value: filteredOrders.length, trend: "+12%", up: true },
-          { label: "Revenue", value: formatPKR(totalRevenue), trend: "+8%", up: true },
-          { label: "COD Collected", value: formatPKR(codCollected), trend: "+15%", up: true },
-          { label: "Returns", value: returnsCount, trend: "-2 orders", up: false },
+          { label: "Total Orders", value: filteredOrders.length, trend: "+12%", up: true, icon: Package, color: "text-blue-600" },
+          { label: "Revenue", value: formatPKR(totalRevenue), trend: "+8%", up: true, icon: TrendingUp, color: "text-indigo-600" },
+          { label: "COD Collected", value: formatPKR(codCollected), trend: "+15%", up: true, icon: Banknote, color: "text-emerald-600" },
+          { label: "Returns", value: returnsCount, trend: "-2 orders", up: false, icon: AlertTriangle, color: "text-red-500" },
         ].map((c, i) => (
-          <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-            <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">{c.label}</div>
-            <div className="text-xl font-bold font-mono text-[#0F172A]">{c.value}</div>
-            <div className={cn("text-xs font-medium mt-1.5", c.up ? "text-green-600" : "text-red-500")}>
-              {c.up ? "↑" : "↓"} {c.trend} vs last period
-            </div>
-          </div>
+          <StatCard 
+            key={i} 
+            label={c.label} 
+            value={c.value} 
+            sub={`${c.up ? "↑" : "↓"} ${c.trend} vs last period`} 
+            icon={c.icon} 
+            color={`bg-white ${c.color}`} 
+            priority="secondary" 
+          />
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 col-span-1">
-          <h3 className="text-sm font-semibold text-[#0F172A] mb-4">Daily Orders</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 col-span-1">
+          <h3 className="text-sm font-semibold text-[#0F172A] mb-5">Daily Orders</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={WEEKLY_DATA} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -2162,7 +2251,7 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 col-span-1">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 col-span-1">
           <h3 className="text-sm font-semibold text-[#0F172A] mb-1">Revenue vs COD</h3>
           <div className="flex gap-4 mb-3 text-xs text-slate-400">
             <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-[#0F172A] inline-block rounded" /> Revenue</span>
@@ -2190,8 +2279,8 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
             </AreaChart>
           </ResponsiveContainer>
         </div>
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 col-span-1">
-          <h3 className="text-sm font-semibold text-[#0F172A] mb-4">Returns Trend</h3>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 col-span-1">
+          <h3 className="text-sm font-semibold text-[#0F172A] mb-5">Returns Trend</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={[
               { day: "Mon", returns: 0 },
@@ -2230,32 +2319,34 @@ function ActivityLogScreen({ activityLogs }: { activityLogs: typeof ACTIVITY_DAT
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-bold text-[#0F172A]">Activity Log</h1>
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="overflow-x-auto flex-1">
           <table className="w-full text-sm min-w-[520px]">
-            <thead>
-              <tr className="bg-slate-50/70 text-xs font-medium text-slate-400 uppercase tracking-wide">
-                <th className="text-left px-5 py-3">Date</th>
-                <th className="text-left px-4 py-3">Time</th>
-                <th className="text-left px-4 py-3">Action</th>
-                <th className="text-left px-4 py-3">Order</th>
-                <th className="text-left px-4 py-3">Performed By</th>
+            <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+              <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="text-left px-6 py-3">Date</th>
+                <th className="text-left px-6 py-3">Time</th>
+                <th className="text-left px-6 py-3">Action</th>
+                <th className="text-left px-6 py-3">Order</th>
+                <th className="text-left px-6 py-3">Performed By</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-100">
               {activityLogs.map(log => (
-                <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-5 py-3 text-xs text-slate-500">{log.date}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">{log.time}</td>
-                  <td className="px-4 py-3">
-                    <span className={cn("px-2 py-0.5 rounded text-xs font-medium", actionColor[log.action] || "bg-slate-100 text-slate-600")}>
+                <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 text-xs font-medium text-slate-500">{log.date}</td>
+                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{log.time}</td>
+                  <td className="px-6 py-4">
+                    <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide ring-1 ring-inset",
+                      actionColor[log.action] ? `${actionColor[log.action].replace('bg-', 'bg-').replace('50', '50').replace('text-', 'text-').replace('700', '700')} ring-${actionColor[log.action].split(' ')[1].split('-')[1]}-600/20` : "bg-slate-50 text-slate-700 ring-slate-600/20"
+                    )}>
                       {log.action}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-mono text-[11px] font-semibold text-[#0F172A]">{log.order}</td>
-                  <td className="px-4 py-3">
-                    <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium",
-                      log.by === "Sami" ? "bg-indigo-50 text-indigo-700" : "bg-purple-50 text-purple-700"
+                  <td className="px-6 py-4 font-mono text-xs font-bold text-[#0F172A]">{log.order}</td>
+                  <td className="px-6 py-4">
+                    <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide",
+                      log.by === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
                     )}>{log.by}</span>
                   </td>
                 </tr>
