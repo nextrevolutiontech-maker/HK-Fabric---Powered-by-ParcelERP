@@ -1,0 +1,139 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model StaffMember {
+  id        String   @id @default(uuid())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Customer {
+  id             String   @id @default(uuid())
+  name           String?
+  phone          String   @unique
+  alternatePhone String?
+  city           String?
+  address        String?
+  notes          String?
+  totalOrders    Int      @default(0)
+  totalSpent     Float    @default(0)
+  lastOrderDate  DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  orders         Order[]
+}
+
+model Order {
+  id               String   @id @default(uuid())
+  orderNo          String   @unique
+  customerId       String?
+  customer         Customer? @relation(fields: [customerId], references: [id])
+  handledBy        String? // e.g. Sami, Abid
+  orderType        String   // COD, NON-COD
+  totalAmount      Float
+  status           String   @default("CONFIRMED")
+  codStatus        String   @default("PENDING")
+  isLabelPrinted   Boolean  @default(false)
+  voidReason       String?
+  notes            String?
+  advancePayment   Float    @default(0)
+  paymentType      String   @default("Courier")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  items            OrderItem[]
+  trackingEntries  TrackingEntry[]
+  labels           ParcelLabel[]
+  codPayments      CodPayment[]
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  productName String
+  qty         Int
+  unitPrice   Float
+  lineTotal   Float
+  createdAt   DateTime @default(now())
+}
+
+model TrackingEntry {
+  id             String   @id @default(uuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id])
+  courierName    String
+  trackingNumber String   @unique
+  trackingDate   DateTime @default(now())
+  receiptUrl     String?
+  createdAt      DateTime @default(now())
+}
+
+model ParcelLabel {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  printedAt DateTime @default(now())
+  printedBy String?
+}
+
+model CodPayment {
+  id           String   @id @default(uuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id])
+  amount       Float
+  receivedDate DateTime @default(now())
+  referenceNo  String?
+  notes        String?
+  createdAt    DateTime @default(now())
+}
+
+model Settlement {
+  id             String   @id @default(uuid())
+  settlementNo   String   @unique
+  courierName    String
+  fileUrl        String?
+  totalAmount    Float
+  uploadedAt     DateTime @default(now())
+
+  items          SettlementItem[]
+}
+
+model SettlementItem {
+  id              String   @id @default(uuid())
+  settlementId    String
+  settlement      Settlement @relation(fields: [settlementId], references: [id])
+  trackingNumber  String
+  amount          Float
+  matchedOrderId  String?
+  status          String   @default("UNMATCHED") // MATCHED, UNMATCHED
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  orderId     String?
+  action      String
+  performedBy String
+  oldValue    String?
+  newValue    String?
+  details     String?
+  createdAt   DateTime @default(now())
+}
+
+model Setting {
+  id        String   @id @default(uuid())
+  ownerPin  String   @default("1234")
+  shopName  String   @default("HK Fabric")
+  shopLogo  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

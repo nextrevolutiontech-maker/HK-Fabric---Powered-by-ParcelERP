@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+"use client";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode, InputHTMLAttributes, SelectHTMLAttributes, ElementType } from "react";
 import {
   LayoutDashboard, Plus, Package, Truck, Banknote, Receipt,
@@ -11,6 +13,7 @@ import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from "recharts";
+import Tesseract from "tesseract.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +36,8 @@ interface Order {
   deliveryCharges?: number;
   receivedDate?: string;
   receiptUrl?: string;
+  advancePayment?: number;
+  paymentType?: "Online" | "Courier";
 }
 
 // ─── Mock Data & Constants ──────────────────────────────────────────────────────
@@ -203,7 +208,7 @@ function FieldInput({ label, required, ...props }: InputHTMLAttributes<HTMLInput
       <input
         {...props}
         className={cn(
-          "block w-full rounded-md border-0 py-2 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] sm:text-sm sm:leading-6 transition-all duration-200",
+          "block w-full rounded-md border-0 py-2 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] sm:text-sm sm:leading-6 transition-all duration-200",
           props.className
         )}
       />
@@ -356,7 +361,7 @@ function Sidebar({ screen, setScreen, open, onClose }: {
 
   return (
     <>
-      <div className="hidden lg:flex lg:flex-col w-60 flex-shrink-0">{inner}</div>
+      <div className="hidden lg:flex lg:flex-col w-60 flex-shrink-0 print:hidden">{inner}</div>
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={onClose} />
@@ -370,17 +375,18 @@ function Sidebar({ screen, setScreen, open, onClose }: {
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 function Header({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSearchClick: () => void }) {
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState<Date | null>(null);
   useEffect(() => {
+    setTime(new Date());
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const dateStr = time.toLocaleDateString("en-PK", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-  const timeStr = time.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const dateStr = time ? time.toLocaleDateString("en-PK", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : "";
+  const timeStr = time ? time.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
 
   return (
-    <header className="bg-white border-b border-slate-100 px-4 lg:px-6 py-3 flex items-center gap-4 flex-shrink-0 z-30 sticky top-0">
+    <header className="bg-white border-b border-slate-100 px-4 lg:px-6 py-3 flex items-center gap-4 flex-shrink-0 z-30 sticky top-0 print:hidden">
       <button onClick={onMenuClick} className="lg:hidden p-2 -ml-2 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors">
         <Menu size={20} />
       </button>
@@ -773,6 +779,8 @@ function CreateOrderScreen({
   const [address, setAddress] = useState("");
   const [orderType, setOrderType] = useState<"COD" | "NON-COD">("COD");
   const [deliveryCharges, setDeliveryCharges] = useState<number>(0);
+  const [advancePayment, setAdvancePayment] = useState<number>(0);
+  const [paymentType, setPaymentType] = useState<"Online" | "Courier">("Courier");
   const [notes, setNotes] = useState("");
   const [products, setProducts] = useState([{ name: "", qty: 1, price: 0 }]);
   const [saved, setSaved] = useState(false);
@@ -794,6 +802,8 @@ function CreateOrderScreen({
         setAddress(o.address);
         setOrderType(o.type);
         setDeliveryCharges(o.deliveryCharges || 0);
+        setAdvancePayment(o.advancePayment || 0);
+        setPaymentType(o.paymentType || "Courier");
         setNotes(o.notes || "");
         setProducts(o.products.map(p => ({ ...p })));
       }
@@ -856,6 +866,8 @@ function CreateOrderScreen({
       products: products,
       type: orderType,
       deliveryCharges: deliveryCharges,
+      advancePayment: advancePayment,
+      paymentType: paymentType,
       notes: notes,
       courier: editOrderId ? orders.find(item => item.id === editOrderId)?.courier : undefined,
       trackingNo: editOrderId ? orders.find(item => item.id === editOrderId)?.trackingNo : undefined,
@@ -945,7 +957,7 @@ function CreateOrderScreen({
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <FieldInput label="Customer Name" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Full name" />
+          <FieldInput label="Customer Name" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Full name" required />
           <FieldInput label="Alternate Number" value={altPhone} onChange={e => setAltPhone(e.target.value)} placeholder="Optional" className="font-mono" />
           <FieldSelect label="Province" value={province} onChange={e => { setProvince(e.target.value); setCity(""); }}>
             <option value="">Select Province</option>
@@ -958,6 +970,7 @@ function CreateOrderScreen({
               value={city}
               onChange={e => setCity(e.target.value)}
               placeholder="Select or type city..."
+              required
               className="block w-full rounded-md border-0 py-2 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] sm:text-sm sm:leading-6 transition-all duration-200"
             />
             <datalist id="pakistan-cities">
@@ -978,9 +991,9 @@ function CreateOrderScreen({
         </div>
 
         <div className="hidden sm:grid grid-cols-12 gap-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-1 mb-2">
-          <div className="col-span-5">Product Name</div>
-          <div className="col-span-2 text-center">Qty</div>
-          <div className="col-span-3 text-right">Unit Price</div>
+          <div className="col-span-5">Product Name <span className="text-red-500">*</span></div>
+          <div className="col-span-2 text-center">Qty <span className="text-red-500">*</span></div>
+          <div className="col-span-3 text-right">Unit Price <span className="text-red-500">*</span></div>
           <div className="col-span-2 text-right">Total</div>
         </div>
 
@@ -990,15 +1003,18 @@ function CreateOrderScreen({
               <div className="col-span-12 sm:col-span-5">
                 <input value={p.name} onChange={e => updateProduct(i, "name", e.target.value)}
                   placeholder="Product name"
+                  required
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors" />
               </div>
               <div className="col-span-4 sm:col-span-2">
                 <input type="number" min={1} value={p.qty} onChange={e => updateProduct(i, "qty", parseInt(e.target.value) || 1)}
+                  required
                   className="w-full px-2 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-center font-mono transition-colors" />
               </div>
               <div className="col-span-5 sm:col-span-3">
-                <input type="number" min={0} value={p.price || ""} onChange={e => updateProduct(i, "price", parseInt(e.target.value) || 0)}
+                <input type="number" min={0} value={p.price === 0 ? "" : p.price} onChange={e => updateProduct(i, "price", parseInt(e.target.value) || 0)}
                   placeholder="0"
+                  required
                   className="w-full px-2 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono transition-colors" />
               </div>
               <div className="col-span-3 sm:col-span-2 flex items-center justify-end gap-1">
@@ -1038,6 +1054,18 @@ function CreateOrderScreen({
                 <span>Grand Total</span>
                 <span className="font-mono text-[#D4AF37]">{formatPKR(grandTotal)}</span>
               </div>
+              {advancePayment > 0 && (
+                <>
+                  <div className="flex justify-between pt-1 font-medium text-sm text-emerald-600">
+                    <span>Advance Received</span>
+                    <span className="font-mono">- {formatPKR(advancePayment)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-100 pt-2 mt-2 font-bold text-lg text-rose-600">
+                    <span>{orderType === "COD" ? "Net COD Amount" : "Balance Due"}</span>
+                    <span className="font-mono">{formatPKR(Math.max(0, grandTotal - advancePayment))}</span>
+                  </div>
+                </>
+              )}
             </div>
             <div className="mt-6">
               <label className="text-sm font-medium text-slate-700 mb-2.5 block">Order Type</label>
@@ -1049,6 +1077,26 @@ function CreateOrderScreen({
                     <span className="text-sm font-medium text-slate-700 group-hover:text-[#0F172A] transition-colors">{t}</span>
                   </label>
                 ))}
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col sm:flex-row gap-5">
+              <div className="flex-1">
+                <label className="text-sm font-medium text-slate-700 mb-2.5 block">Payment Type</label>
+                <div className="flex gap-5">
+                  {(["Online", "Courier"] as const).map(t => (
+                    <label key={t} className="flex items-center gap-2.5 cursor-pointer group">
+                      <input type="radio" name="paymentType" value={t} checked={paymentType === t}
+                        onChange={() => setPaymentType(t)} className="w-4 h-4 accent-[#0F172A] cursor-pointer" />
+                      <span className="text-sm font-medium text-slate-700 group-hover:text-[#0F172A] transition-colors">{t}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="w-32">
+                <label className="text-sm font-medium text-slate-700 mb-2 block">Advance (Rs)</label>
+                <input type="number" min={0} value={advancePayment || ""} onChange={e => setAdvancePayment(parseInt(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono transition-colors" />
               </div>
             </div>
           </div>
@@ -1095,9 +1143,15 @@ function CreateOrderScreen({
                 <span className="font-mono font-medium">{formatPKR(deliveryCharges)}</span>
               </div>
             )}
+            {advancePayment > 0 && (
+              <div className="flex justify-between pt-1 text-xs">
+                <span className="text-slate-400">Advance ({paymentType}):</span>
+                <span className="font-mono font-medium">{formatPKR(advancePayment)}</span>
+              </div>
+            )}
             <div className="flex justify-between border-t border-slate-200 pt-2 mt-2">
               <span className="font-bold text-sm">{orderType === "COD" ? "COD Amount:" : "Total Amount:"}</span>
-              <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(grandTotal)}</span>
+              <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(Math.max(0, grandTotal - advancePayment))}</span>
             </div>
           </div>
           <div className="mt-3 flex justify-center">
@@ -1427,9 +1481,15 @@ function OrdersScreen({
                   <div className="flex justify-between"><span className="text-slate-400">WhatsApp:</span><span>{o.whatsapp}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">City:</span><span>{o.city}</span></div>
                   <div className="pt-1"><span className="text-slate-400">Address: </span><span>{o.address}</span></div>
+                  {o.advancePayment && o.advancePayment > 0 ? (
+                    <div className="flex justify-between pt-1 text-xs">
+                      <span className="text-slate-400">Advance ({o.paymentType}):</span>
+                      <span className="font-mono font-medium">{formatPKR(o.advancePayment)}</span>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between border-t border-slate-200 pt-2 mt-2">
                     <span className="font-bold text-sm">COD:</span>
-                    <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(o.amount)}</span>
+                    <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(Math.max(0, o.amount - (o.advancePayment || 0)))}</span>
                   </div>
                 </div>
                 <div className="mt-3 flex justify-center">
@@ -1468,9 +1528,15 @@ function OrdersScreen({
                   <div className="flex justify-between"><span className="text-slate-400">WhatsApp:</span><span>{o.whatsapp}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">City:</span><span>{o.city}</span></div>
                   <div className="pt-1"><span className="text-slate-400">Address: </span><span>{o.address}</span></div>
+                  {o.advancePayment && o.advancePayment > 0 ? (
+                    <div className="flex justify-between pt-1 text-xs">
+                      <span className="text-slate-400">Advance ({o.paymentType}):</span>
+                      <span className="font-mono font-medium">{formatPKR(o.advancePayment)}</span>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between border-t border-slate-200 pt-2 mt-2">
                     <span className="font-bold text-sm">COD:</span>
-                    <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(o.amount)}</span>
+                    <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(Math.max(0, o.amount - (o.advancePayment || 0)))}</span>
                   </div>
                 </div>
                 <div className="mt-3 flex justify-center">
@@ -1546,9 +1612,15 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
                 <span className="font-mono font-medium">{formatPKR(o.deliveryCharges)}</span>
               </div>
             ) : null}
+            {o.advancePayment && o.advancePayment > 0 ? (
+              <div className="flex justify-between pt-1 text-xs">
+                <span className="text-slate-400">Advance ({o.paymentType}):</span>
+                <span className="font-mono font-medium">{formatPKR(o.advancePayment)}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between border-t border-slate-200 pt-2 mt-2">
               <span className="font-bold text-sm">{o.type === "COD" ? "COD Amount:" : "Total Amount:"}</span>
-              <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(o.amount)}</span>
+              <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(Math.max(0, o.amount - (o.advancePayment || 0)))}</span>
             </div>
           </div>
           <div className="mt-3 flex justify-center">
@@ -2065,61 +2137,157 @@ function CODScreen({ orders, onReceiveCOD }: { orders: Order[]; onReceiveCOD: (i
 function SettlementsScreen() {
   const [uploaded, setUploaded] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [preview, setPreview] = useState<any[]>([]);
+  const queryClient = useQueryClient();
 
-  const preview = [
-    { tracking: "TCS567890123", amount: 7100, matched: "HKF-2026-000142", status: "matched" },
-    { tracking: "PEX234567890", amount: 12500, matched: "HKF-2026-000140", status: "matched" },
-    { tracking: "MNP901234567", amount: 5600, matched: "HKF-2026-000143", status: "pending" },
-    { tracking: "LEP999000111", amount: 3200, matched: null, status: "unmatched" },
-  ];
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | React.DragEvent) => {
+    e.preventDefault();
+    let file: File | null = null;
+    
+    if ('dataTransfer' in e) {
+      file = e.dataTransfer.files[0];
+    } else if (e.target instanceof HTMLInputElement && e.target.files) {
+      file = e.target.files[0];
+    }
+
+    if (!file) return;
+
+    if (file.type.startsWith('image/')) {
+      setUploaded(true);
+      setIsProcessing(true);
+      try {
+        const result = await Tesseract.recognize(file, 'eng');
+        const text = result.data.text;
+        
+        // Extract tracking numbers: length 8 to 15, alphanumeric
+        const trackingRegex = /\b[A-Z0-9]{8,15}\b/gi;
+        const matches = text.match(trackingRegex) || [];
+        // Filter out obvious non-tracking stuff like just dates or pure low numbers
+        const potentialTrackings = Array.from(new Set(matches)).filter(t => t.length > 7);
+
+        // Send to backend API
+        const response = await fetch('/api/settlements/match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trackingNumbers: potentialTrackings })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setPreview(data);
+        } else {
+          alert('Failed to match tracking numbers with server.');
+        }
+      } catch (err) {
+        console.error("OCR Error:", err);
+        alert('Failed to read image.');
+      } finally {
+        setIsProcessing(false);
+      }
+    } else {
+      alert("Please upload an image for OCR processing.");
+    }
+  };
+
+  const approveMutation = useMutation({
+    mutationFn: async () => {
+      const matchedOrderIds = preview.filter(p => p.status === 'matched').map(p => p.orderId);
+      if (matchedOrderIds.length === 0) return;
+
+      const res = await fetch('/api/settlements/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: matchedOrderIds })
+      });
+      if (!res.ok) throw new Error('Failed to approve');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      setUploaded(false);
+      setPreview([]);
+      alert("Settlement approved successfully!");
+    }
+  });
+
+  const matchedCount = preview.filter(p => p.status === 'matched').length;
+  const unmatchedCount = preview.filter(p => p.status === 'unmatched').length;
 
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-bold text-[#0F172A]">Settlements</h1>
 
-      <div
-        className={cn(
-          "border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all",
-          dragOver ? "border-[#0F172A] bg-slate-50" : "border-slate-200 hover:border-slate-300 bg-white"
-        )}
-        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={() => { setDragOver(false); setUploaded(true); }}
-        onClick={() => setUploaded(true)}
-      >
-        <Upload size={28} className="mx-auto mb-3 text-slate-300" />
-        <p className="text-sm font-semibold text-slate-600">Upload Settlement File</p>
-        <p className="text-xs text-slate-400 mt-1">Excel (.xlsx) or CSV — drag & drop or click to browse</p>
-        <div className="flex gap-2 justify-center mt-4">
-          <span className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs font-medium">Excel</span>
-          <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs font-medium">CSV</span>
-        </div>
-      </div>
+      {!uploaded && (
+        <label
+          className={cn(
+            "block border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all relative overflow-hidden group",
+            dragOver ? "border-[#0F172A] bg-slate-50" : "border-slate-200 hover:border-slate-300 bg-white"
+          )}
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { setDragOver(false); handleFileUpload(e); }}
+        >
+          <input type="file" accept="image/*,.csv,.xlsx" className="hidden" onChange={handleFileUpload} />
+          
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-purple-50/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+          
+          <div className="relative z-10">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 shadow-sm group-hover:scale-110 transition-transform duration-300">
+              <Upload size={28} className="text-indigo-500" />
+            </div>
+            <p className="text-sm font-semibold text-slate-700">Upload Settlement Photo</p>
+            <p className="text-xs text-slate-400 mt-1 max-w-[250px] mx-auto">Drop an image of the courier slip here to auto-scan tracking numbers</p>
+            <div className="flex gap-2 justify-center mt-5">
+              <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full text-xs font-semibold shadow-sm">Photo (OCR)</span>
+              <span className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs font-medium">Excel</span>
+              <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs font-medium">CSV</span>
+            </div>
+          </div>
+        </label>
+      )}
 
       {uploaded && (
         <>
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-              <h2 className="text-sm font-semibold text-[#0F172A]">Settlement Preview</h2>
-              <div className="flex gap-2">
-                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[11px] font-semibold tracking-wide rounded-md ring-1 ring-inset ring-emerald-600/20">3 matched</span>
-                <span className="px-2.5 py-1 bg-rose-50 text-rose-700 text-[11px] font-semibold tracking-wide rounded-md ring-1 ring-inset ring-rose-600/20">1 unmatched</span>
-              </div>
+              <h2 className="text-sm font-semibold text-[#0F172A] flex items-center gap-2">
+                Settlement Preview
+                {isProcessing && <div className="h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />}
+              </h2>
+              {!isProcessing && preview.length > 0 && (
+                <div className="flex gap-2">
+                  <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[11px] font-semibold tracking-wide rounded-md ring-1 ring-inset ring-emerald-600/20">{matchedCount} matched</span>
+                  <span className="px-2.5 py-1 bg-rose-50 text-rose-700 text-[11px] font-semibold tracking-wide rounded-md ring-1 ring-inset ring-rose-600/20">{unmatchedCount} unmatched</span>
+                </div>
+              )}
             </div>
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-sm min-w-[500px]">
-                <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
-                  <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                    <th className="text-left px-6 py-3">Tracking No</th>
-                    <th className="text-right px-6 py-3">Amount</th>
-                    <th className="text-left px-6 py-3">Matched Order</th>
-                    <th className="text-left px-6 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {preview.map((row, i) => (
-                    <tr key={i} className={cn("hover:bg-slate-50 transition-colors", row.status === "unmatched" && "bg-rose-50/30")}>
-                      <td className="px-6 py-4 font-mono text-xs font-semibold text-[#0F172A]">{row.tracking}</td>
+            
+            <div className="overflow-x-auto flex-1 max-h-[400px]">
+              {isProcessing ? (
+                <div className="flex flex-col items-center justify-center p-12 text-slate-400">
+                  <div className="relative w-16 h-16 mb-4">
+                    <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin"></div>
+                  </div>
+                  <p className="text-sm font-medium animate-pulse text-slate-500">Scanning tracking numbers with AI...</p>
+                </div>
+              ) : preview.length === 0 ? (
+                <div className="p-10 text-center text-slate-500 text-sm">No tracking numbers found.</div>
+              ) : (
+                <table className="w-full text-sm min-w-[500px]">
+                  <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+                    <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                      <th className="text-left px-6 py-3">Tracking No</th>
+                      <th className="text-right px-6 py-3">Order Amount</th>
+                      <th className="text-left px-6 py-3">Matched Order</th>
+                      <th className="text-left px-6 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {preview.map((row, i) => (
+                      <tr key={i} className={cn("hover:bg-slate-50 transition-colors", row.status === "unmatched" && "bg-rose-50/30")}>
+                        <td className="px-6 py-4 font-mono text-xs font-semibold text-[#0F172A]">{row.tracking}</td>
                       <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(row.amount)}</td>
                       <td className="px-6 py-4 font-mono text-sm text-slate-700">{row.matched || "—"}</td>
                       <td className="px-6 py-4">
@@ -2135,7 +2303,8 @@ function SettlementsScreen() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            )}
+          </div>
           </div>
           <div className="flex gap-3">
             <Btn><Check size={13} /> Approve Settlement</Btn>
@@ -2150,9 +2319,11 @@ function SettlementsScreen() {
 // ─── Reports Screen ────────────────────────────────────────────────────────────
 
 function ReportsScreen({ orders }: { orders: Order[] }) {
+  const [isExporting, setIsExporting] = useState(false);
   const [period, setPeriod] = useState("weekly");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const filteredOrders = orders.filter(o => {
     if (period === "daily") {
@@ -2189,9 +2360,70 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
   const codCollected = filteredOrders.filter(o => o.codStatus === "received").reduce((a, b) => a + b.amount, 0);
   const returnsCount = filteredOrders.filter(o => o.status === "returned").length;
 
+  const handleExportPDF = async () => {
+    if (!reportRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      const { toPng } = await import("html-to-image");
+      const { jsPDF } = await import("jspdf");
+
+      const imgData = await toPng(reportRef.current, {
+        quality: 0.95,
+        backgroundColor: '#F8FAFC',
+        filter: (node) => {
+          if (node.hasAttribute && node.hasAttribute("data-html2canvas-ignore")) {
+            return false;
+          }
+          return true;
+        }
+      });
+      
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+      
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`HK_Fabric_Report_${period}.pdf`);
+    } catch (e: any) {
+      console.error(e);
+      alert("Failed to export PDF: " + (e.message || "Unknown error. Try restarting the dev server."));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportExcel = () => {
+    const headers = ["Order No", "Date", "Customer", "City", "Amount", "Status", "COD Status", "Tracking No", "Courier"];
+    const rows = filteredOrders.map(o => [
+      o.id,
+      o.date,
+      `"${o.customer}"`,
+      `"${o.city}"`,
+      o.amount,
+      o.status,
+      o.codStatus,
+      o.trackingNo || "",
+      o.courier || ""
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `HK_Fabric_Report_${period}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-5 print:p-0 print:m-0" ref={reportRef}>
+      <div className="flex items-center justify-between flex-wrap gap-3 print:hidden" data-html2canvas-ignore>
         <h1 className="text-xl font-bold text-[#0F172A]">Reports</h1>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1 bg-slate-100 rounded-lg p-1 flex-wrap">
@@ -2204,8 +2436,10 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
               </button>
             ))}
           </div>
-          <Btn size="sm" variant="secondary"><Download size={12} /> PDF</Btn>
-          <Btn size="sm" variant="secondary"><Download size={12} /> Excel</Btn>
+          <Btn size="sm" variant="secondary" onClick={handleExportPDF} disabled={isExporting}>
+            <Download size={12} /> {isExporting ? "Exporting..." : "PDF"}
+          </Btn>
+          <Btn size="sm" variant="secondary" onClick={handleExportExcel}><Download size={12} /> Excel</Btn>
         </div>
       </div>
 
@@ -2506,12 +2740,212 @@ function DailyClosingScreen({ orders }: { orders: Order[] }) {
 // ─── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const queryClient = useQueryClient();
   const [screen, setScreen] = useState<Screen>("dashboard");
+  const [mounted, setMounted] = useState(false);
+  
+  // Offline State
+  const [isOffline, setIsOffline] = useState(false);
+  const [offlineOrders, setOfflineOrders] = useState<Order[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    if (typeof window !== "undefined") {
+      const savedScreen = localStorage.getItem("currentScreen") as Screen;
+      if (savedScreen) setScreen(savedScreen);
+      
+      setIsOffline(!navigator.onLine);
+      const savedOffline = localStorage.getItem("offline_orders");
+      if (savedOffline) {
+        try { setOfflineOrders(JSON.parse(savedOffline)); } catch(e) {}
+      }
+
+      const handleOnline = () => setIsOffline(false);
+      const handleOffline = () => setIsOffline(true);
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+      return () => {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mounted) localStorage.setItem("currentScreen", screen);
+  }, [screen, mounted]);
+  
+  const saveOrderOffline = (order: Order) => {
+    setOfflineOrders(prev => {
+      const updated = [...prev, order];
+      localStorage.setItem("offline_orders", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const syncOfflineOrders = async () => {
+    if (offlineOrders.length === 0) return;
+    setIsSyncing(true);
+    let failed: Order[] = [];
+    let syncedCount = 0;
+    
+    for (const order of offlineOrders) {
+      const payload = {
+        orderNo: order.id,
+        customerDetails: {
+          phone: order.whatsapp,
+          name: order.customer,
+          city: order.city,
+          address: order.address,
+        },
+        handledBy: order.handledBy,
+        orderType: order.type,
+        totalAmount: order.amount,
+        advancePayment: order.advancePayment || 0,
+        paymentType: order.paymentType || "Courier",
+        items: order.products.map((p: any) => ({
+          productName: p.name,
+          qty: p.qty,
+          unitPrice: p.price,
+          lineTotal: p.qty * p.price
+        })),
+        notes: order.notes
+      };
+
+      try {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error("Failed");
+        syncedCount++;
+      } catch (e) {
+        failed.push(order);
+      }
+    }
+    
+    setOfflineOrders(failed);
+    localStorage.setItem("offline_orders", JSON.stringify(failed));
+    queryClient.invalidateQueries({ queryKey: ['orders'] });
+    setIsSyncing(false);
+    
+    if (failed.length === 0) {
+      alert(`Successfully synced ${syncedCount} orders to the database!`);
+    } else {
+      alert(`Synced ${syncedCount} orders. ${failed.length} failed and remain in queue.`);
+    }
+  };
+
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
-  const [activityLogs, setActivityLogs] = useState<typeof ACTIVITY_DATA>(ACTIVITY_DATA);
+
+  const { data: orders = [], isLoading } = useQuery({
+    queryKey: ['orders'],
+    queryFn: async () => {
+      const res = await fetch('/api/orders');
+      if (!res.ok) throw new Error("Failed to fetch orders");
+      const data = await res.json();
+      return data.map((o: any) => ({
+        _id: o.id,
+        id: o.orderNo,
+        customer: o.customer?.name || "Unknown",
+        whatsapp: o.customer?.phone || "",
+        city: o.customer?.city || "",
+        address: o.customer?.address || "",
+        amount: o.totalAmount,
+        handledBy: o.handledBy,
+        status: o.status.toLowerCase(),
+        codStatus: o.codStatus.toLowerCase(),
+        date: new Date(o.createdAt).toISOString().split('T')[0],
+        courier: o.trackingEntries?.[0]?.courierName,
+        trackingNo: o.trackingEntries?.[0]?.trackingNumber,
+        products: o.items?.map((i: any) => ({ name: i.productName, qty: i.qty, price: i.unitPrice })) || [],
+        type: o.orderType,
+        notes: o.notes,
+        province: "",
+        deliveryCharges: 0,
+        advancePayment: o.advancePayment || 0,
+        paymentType: o.paymentType || "Courier",
+        receivedDate: o.codPayments?.[0]?.receivedDate ? new Date(o.codPayments[0].receivedDate).toISOString().split('T')[0] : undefined
+      }));
+    }
+  });
+
+  const { data: activityLogs = [] } = useQuery({
+    queryKey: ['activities'],
+    queryFn: async () => {
+      const res = await fetch('/api/activities');
+      if (!res.ok) throw new Error("Failed to fetch activities");
+      return await res.json();
+    }
+  });
+
+  const createOrderMut = useMutation({
+    mutationFn: async (newOrder: Order) => {
+      if (!navigator.onLine) {
+        saveOrderOffline(newOrder);
+        return "offline";
+      }
+      const payload = {
+        orderNo: newOrder.id,
+        customerDetails: {
+          phone: newOrder.whatsapp,
+          name: newOrder.customer,
+          city: newOrder.city,
+          address: newOrder.address,
+        },
+        handledBy: newOrder.handledBy,
+        orderType: newOrder.type,
+        totalAmount: newOrder.amount,
+        advancePayment: newOrder.advancePayment || 0,
+        paymentType: newOrder.paymentType || "Courier",
+        items: newOrder.products.map((p: any) => ({
+          productName: p.name,
+          qty: p.qty,
+          unitPrice: p.price,
+          lineTotal: p.qty * p.price
+        })),
+        notes: newOrder.notes
+      };
+      
+      try {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error("Failed to create order");
+        return "online";
+      } catch (err) {
+        saveOrderOffline(newOrder);
+        return "offline";
+      }
+    },
+    onSuccess: (status) => {
+      if (status === "online") queryClient.invalidateQueries({ queryKey: ['orders'] });
+    }
+  });
+
+  const updateOrderMut = useMutation({
+    mutationFn: async ({ id, data }: { id: string, data: any }) => {
+      const dbId = orders.find((o: any) => o.id === id)?._id;
+      if (!dbId) throw new Error("Order not found");
+      const res = await fetch(`/api/orders/${dbId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to update order");
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
+    onError: (err: any) => alert(err.message)
+  });
 
   const handleViewOrder = (id: string) => {
     setSelectedOrderId(id);
@@ -2524,69 +2958,36 @@ export default function App() {
   };
 
   const handleSaveOrder = (newOrder: Order) => {
-    let action = "Create Order";
-    setOrders(prev => {
-      const idx = prev.findIndex(o => o.id === newOrder.id);
-      if (idx > -1) {
-        action = "Update Order";
-        const updated = [...prev];
-        updated[idx] = newOrder;
-        return updated;
-      }
-      return [newOrder, ...prev];
-    });
-
-    const newLog = {
-      id: Date.now(),
-      date: "2026-06-20",
-      time: new Date().toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" }),
-      action,
-      order: newOrder.id,
-      by: newOrder.handledBy
-    };
-    setActivityLogs(prev => [newLog, ...prev]);
+    const existing = orders.find((o: any) => o.id === newOrder.id);
+    if (existing) {
+      // Currently not handling deep item updates via PATCH.
+      alert("Editing existing orders fully requires expanded API support.");
+    } else {
+      createOrderMut.mutate(newOrder);
+    }
   };
 
   const handleVoidOrder = (orderId: string, performer: "Sami" | "Abid") => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: "void" } : o));
-
-    const newLog = {
-      id: Date.now(),
-      date: "2026-06-20",
-      time: new Date().toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" }),
-      action: "Void Order",
-      order: orderId,
-      by: performer
-    };
-    setActivityLogs(prev => [newLog, ...prev]);
+    const pin = prompt("Enter Owner PIN to Void this order:");
+    if (!pin) return;
+    updateOrderMut.mutate({
+      id: orderId,
+      data: { status: 'void', performedBy: performer, pin }
+    });
   };
 
   const handleSaveTracking = (orderId: string, courier: string, trackingNo: string) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, courier, trackingNo, status: "shipped" } : o));
-
-    const newLog = {
-      id: Date.now(),
-      date: "2026-06-20",
-      time: new Date().toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" }),
-      action: "Tracking Added",
-      order: orderId,
-      by: "Sami"
-    };
-    setActivityLogs(prev => [newLog, ...prev]);
+    updateOrderMut.mutate({
+      id: orderId,
+      data: { status: 'shipped', courierName: courier, trackingNumber: trackingNo, actionName: "Tracking Added" }
+    });
   };
 
   const handleReceiveCOD = (orderId: string, date: string) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, codStatus: "received", status: "delivered", receivedDate: date } : o));
-
-    const newLog = {
-      id: Date.now(),
-      date: "2026-06-20",
-      time: new Date().toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" }),
-      action: "COD Received",
-      order: orderId,
-      by: "Sami"
-    };
-    setActivityLogs(prev => [newLog, ...prev]);
+    updateOrderMut.mutate({
+      id: orderId,
+      data: { codStatus: 'received', status: 'delivered', actionName: "COD Received" }
+    });
   };
 
   useEffect(() => {
@@ -2608,6 +3009,26 @@ export default function App() {
       />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* Offline Banner */}
+        {(isOffline || offlineOrders.length > 0) && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between z-20 shadow-sm">
+            <div className="flex items-center gap-2 text-amber-800 text-sm font-medium">
+              <AlertCircle size={16} />
+              {isOffline ? "You are offline. Orders will be saved locally." : `${offlineOrders.length} offline orders pending sync.`}
+            </div>
+            {offlineOrders.length > 0 && !isOffline && (
+              <button 
+                onClick={syncOfflineOrders}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors disabled:opacity-50"
+              >
+                {isSyncing ? <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Upload size={12} />}
+                {isSyncing ? "Syncing..." : "Sync Now"}
+              </button>
+            )}
+          </div>
+        )}
+
         <Header
           onMenuClick={() => setSidebarOpen(true)}
           onSearchClick={() => setSearchOpen(true)}

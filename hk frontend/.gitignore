@@ -2,3 +2,11 @@ node_modules/
 dist/
 .env
 .vscode/
+/src/generated/prisma
+
+# Local database
+dev.db
+
+# Next.js
+.next/
+

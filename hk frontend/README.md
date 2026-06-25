@@ -1,4 +1,4 @@
-# HK Fabric - Courier & COD Management System
+# HK Fabric - Courier & COD Management System (Frontend Flow)
 
 Yeh document is system ke mukammal **Business Flow** ko explain karta hai, taake koi bhi naya staff ya developer asani se samajh sake ke system kaisay kaam karta hai.
 
@@ -70,3 +70,55 @@ Kyun ke yeh abhi sirf **Frontend** hai (jisme Mock Data use ho raha hai), is sys
 - **Authentication (Login):** System ko secure karne ke liye admin aur staff ka login system (ID aur Password) banana.
 - **Thermal Label Printing:** "Print Label" ke button ko asal 4x6 thermal printer ke sath connect karna aur direct PDF print nikalna.
 - **WhatsApp API:** Jaise hi order "Shipped" ho, customer ko auto WhatsApp message bhejna ke "Aapka parcel nikal chuka hai, tracking number: XYZ".
+
+---
+---
+
+# PART 2: Master Architecture Report (v2.0 - Full-Stack)
+
+*Neeche di gayi details ab system ke Naye Full-Stack Architecture (Database aur Backend) ko explain karti hain.*
+
+## 1. Technical Architecture (The Stack)
+
+Pehle yeh system sirf aik "Frontend Prototype" (Vite) tha, lekin ab isay **Enterprise-Grade Full-Stack Application** mein convert kar diya gaya hai.
+
+- **Frontend & Backend Framework:** **Next.js 15 (App Router)**
+  - *Kyun?* Is se humara Frontend aur Backend aik hi project mein rehta hai. Backend ke liye alag se Express.js bananay ki zaroorat nahi. Har API route aik "Serverless Function" ban jata hai jo Vercel par bohut fast aur globally scale hota hai.
+- **UI & Styling:** **Tailwind CSS v4** aur **ShadCN UI**.
+- **Database:** **PostgreSQL** (Development phase mein fast iteration ke liye SQLite `dev.db` use ho raha hai).
+- **ORM (Object-Relational Mapper):** **Prisma**.
+  - *Kyun?* Prisma database se baat karne ka sab se secure aur fast tareeqa hai. Isse SQL Injection ka khatra 0% rehta hai aur raw SQL queries nahi likhni parti.
+
+---
+
+## 2. Database Structure (Prisma Schema)
+
+Database ko highly relational aur trackable banaya gaya hai. Sab se ahem tables yeh hain:
+
+- **Customer:** Har customer unique WhatsApp number se pehchana jata hai. Is table mein customer ki `totalSpent`, aur `lastOrderDate` track hoti hai.
+- **Order:** Main table. Isme `orderType` (COD/NON-COD), `advancePayment`, `paymentType` (Online/Courier), `status` aur `codStatus` save hotay hain. Har order ka ek unique `orderNo` hota hai.
+- **OrderItem:** Aik order mein kitni bedsheets/items hain, unki price aur quantity yahan save hoti hai.
+- **TrackingEntry:** Courier ka naam aur tracking number.
+- **CodPayment & Settlement:** Courier se milne wali payments aur Excel sheet settlements ka record.
+- **Activity (Audit Trail):** System mein jo bhi tabdeeli aati hai (jis ne bhi ki ho), wo is table mein date aur time ke sath mehfooz ho jati hai taake shafafiyat (transparency) rahay.
+
+---
+
+## 3. Next.js Folder Structure
+
+Project ka backend aur frontend is tarah organized hai:
+
+- `src/app/page.tsx`: Hamari main User Interface (Dashboard, Orders, Settings).
+- `src/app/api/`: Hamare backend ke endpoints.
+  - `/api/customers/route.ts`: Customers create aur fetch karne ka logic.
+  - `/api/orders/route.ts`: Naye orders bananay aur edit karne ka logic.
+- `src/lib/prisma.ts`: Database connection ko zinda (alive) rakhne wali global configuration file.
+- `prisma/schema.prisma`: Wo file jismein humari database ki saari tables defined hain.
+
+---
+
+## 4. Security & Deployment
+
+- **Hosting:** Is poore system ko **Vercel** par host kiya ja sakta hai.
+- **Serverless Scaling:** Vercel automatically requests ko handle karega. Rozana 50 parcels hon ya 5,000, system crash nahi hoga.
+- **API Security:** Humari Prisma database logic backend server par hai, isliye browser ya frontend user database tak directly access nahi kar sakta.
