@@ -883,241 +883,303 @@ function CreateOrderScreen({
     }, 1500);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    const isInput = target.tagName === 'INPUT';
+    const isSelect = target.tagName === 'SELECT';
+    const isButton = target.tagName === 'BUTTON';
+
+    let shouldIntercept = false;
+    let goForward = false;
+    let goBackward = false;
+    
+    if (e.key === 'Enter') {
+      if (isInput || isSelect) { shouldIntercept = true; goForward = true; }
+    } else if (e.key === 'ArrowDown') {
+      if (isInput || isSelect || isButton) { shouldIntercept = true; goForward = true; }
+    } else if (e.key === 'ArrowUp') {
+      if (isInput || isSelect || isButton) { shouldIntercept = true; goBackward = true; }
+    } else if (e.key === 'ArrowRight') {
+      if (isButton || isSelect) { shouldIntercept = true; goForward = true; }
+      else if (isInput) {
+        try {
+          const el = target as HTMLInputElement;
+          if (el.type === 'number' || el.selectionStart === el.value?.length) {
+            shouldIntercept = true; goForward = true;
+          }
+        } catch (err) { shouldIntercept = true; goForward = true; }
+      }
+    } else if (e.key === 'ArrowLeft') {
+      if (isButton || isSelect) { shouldIntercept = true; goBackward = true; }
+      else if (isInput) {
+        try {
+          const el = target as HTMLInputElement;
+          if (el.type === 'number' || el.selectionEnd === 0) {
+            shouldIntercept = true; goBackward = true;
+          }
+        } catch (err) { shouldIntercept = true; goBackward = true; }
+      }
+    }
+
+    if (shouldIntercept) {
+      e.preventDefault();
+      const container = e.currentTarget as HTMLElement;
+      const focusable = Array.from(
+        container.querySelectorAll('input, select, textarea, button')
+      ).filter(el => {
+         const htmlEl = el as HTMLElement;
+         return htmlEl.tabIndex >= 0 && !(htmlEl as HTMLInputElement).disabled && htmlEl.offsetParent !== null; 
+      }) as HTMLElement[];
+      
+      const index = focusable.indexOf(target);
+      if (goForward && index > -1 && index < focusable.length - 1) {
+        focusable[index + 1].focus();
+      } else if (goBackward && index > 0) {
+        focusable[index - 1].focus();
+      }
+    }
+  };
+
   return (
-    <div className="space-y-5 max-w-3xl pb-8">
-      <div className="flex items-center gap-3">
-        <button onClick={() => setScreen("orders")} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-          <ArrowLeft size={17} className="text-slate-500" />
-        </button>
-        <div>
-          <h1 className="text-xl font-bold text-[#0F172A]">{editOrderId ? "Edit Order" : "Create Order"}</h1>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">Order ID: {orderIdToSave}</p>
-        </div>
-      </div>
-
-      {errorMsg && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 font-medium">
-          ⚠️ {errorMsg}
-        </div>
-      )}
-
-      {/* Handled By */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-[#0F172A] mb-3">Handled By</h3>
-        <div className="flex gap-3">
-          {(["Sami", "Abid"] as const).map(name => (
-            <button key={name} onClick={() => setHandledBy(name)}
-              className={cn(
-                "px-6 py-2.5 rounded-lg text-sm font-semibold border transition-all",
-                handledBy === name
-                  ? "bg-[#0F172A] text-white border-[#0F172A] shadow-md shadow-[#0F172A]/10"
-                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-              )}>
-              {name}
+    <div className="flex flex-col lg:flex-row gap-5 max-w-5xl pb-8" onKeyDown={handleKeyDown}>
+      {/* Left Column: Form */}
+      <div className="flex-1 space-y-4">
+        {/* Header & Agent */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setScreen("orders")} className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors bg-slate-100">
+              <ArrowLeft size={16} className="text-slate-600" />
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Customer */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-[#0F172A] mb-4">Customer Information</h3>
-
-        <div className="mb-4">
-          <label className="text-sm font-medium text-slate-700 mb-1 block">
-            WhatsApp Number <span className="text-red-500">*</span>
-          </label>
-          <input
-            value={whatsapp} onChange={e => setWhatsapp(e.target.value)}
-            placeholder="03001234567" maxLength={11}
-            className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] font-mono transition-colors"
-          />
-        </div>
-
-        {existing && (
-          <div className="mb-4 p-3.5 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
-            <CheckCircle2 size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
             <div>
-              <div className="text-sm font-semibold text-green-800">Existing Customer Found!</div>
-              <div className="text-xs text-green-700 mt-1 space-x-2">
-                <span>{existing.customer}</span>
-                <span>·</span>
-                <span>{orders.filter(o => o.whatsapp === whatsapp).length} previous orders</span>
-                <span>·</span>
-                <span className="font-medium">
-                  Total Spend: {formatPKR(orders.filter(o => o.whatsapp === whatsapp).reduce((a, b) => a + b.amount, 0))}
-                </span>
-              </div>
-              <div className="text-xs text-green-600 mt-1 font-medium bg-green-100/50 p-1.5 rounded border border-green-200/50 inline-block">
-                Last Order: {existing.id} on {existing.date} ({formatPKR(existing.amount)})
-              </div>
-              <div className="text-xs text-green-600 mt-1">Details auto-filled below ↓</div>
+              <h1 className="text-lg font-bold text-[#0F172A] leading-tight">{editOrderId ? "Edit Order" : "New Order"}</h1>
+              <p className="text-[11px] text-slate-400 font-mono mt-0.5">{orderIdToSave}</p>
             </div>
+          </div>
+          
+          <div className="flex bg-slate-100 p-1 rounded-lg shadow-inner">
+            {(["Sami", "Abid"] as const).map(name => (
+              <button key={name} onClick={() => setHandledBy(name)}
+                className={cn(
+                  "px-4 py-1.5 rounded-md text-xs font-bold transition-all",
+                  handledBy === name
+                    ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-black/5"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                )}>
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {errorMsg && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 font-medium shadow-sm flex items-center gap-2">
+            <AlertCircle size={16} /> {errorMsg}
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <FieldInput label="Customer Name" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Full name" required />
-          <FieldInput label="Alternate Number" value={altPhone} onChange={e => setAltPhone(e.target.value)} placeholder="Optional" className="font-mono" />
-          <FieldSelect label="Province" value={province} onChange={e => { setProvince(e.target.value); setCity(""); }}>
-            <option value="">Select Province</option>
-            {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
-          </FieldSelect>
-          <div className="flex flex-col gap-1.5">
-            <label className="block text-sm font-medium text-slate-700">City <span className="text-red-500">*</span></label>
-            <input
-              list="pakistan-cities"
-              value={city}
-              onChange={e => setCity(e.target.value)}
-              placeholder="Select or type city..."
-              required
-              className="block w-full rounded-md border-0 py-2 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] sm:text-sm sm:leading-6 transition-all duration-200"
-            />
-            <datalist id="pakistan-cities">
-              {(province ? PROVINCE_CITIES[province] : Object.values(PROVINCE_CITIES).flat().sort()).map(c => <option key={c} value={c} />)}
-            </datalist>
+        {/* Unified Customer Card */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden focus-within:border-slate-300 transition-colors">
+          <div className="px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 font-semibold text-[#0F172A] text-sm flex items-center gap-2">
+            <User size={14} className="text-slate-400" /> Customer Details
           </div>
-          <div className="sm:col-span-2 lg:col-span-2">
-            <FieldInput label="Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="Complete delivery address" required />
-          </div>
-        </div>
-      </div>
-
-      {/* Products */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-[#0F172A]">Products</h3>
-          <Btn size="sm" variant="secondary" onClick={addProduct}><Plus size={13} /> Add Row</Btn>
-        </div>
-
-        <div className="hidden sm:grid grid-cols-12 gap-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-1 mb-2">
-          <div className="col-span-5">Product Name <span className="text-red-500">*</span></div>
-          <div className="col-span-2 text-center">Qty <span className="text-red-500">*</span></div>
-          <div className="col-span-3 text-right">Unit Price <span className="text-red-500">*</span></div>
-          <div className="col-span-2 text-right">Total</div>
-        </div>
-
-        <div className="space-y-2">
-          {products.map((p, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 items-center">
-              <div className="col-span-12 sm:col-span-5">
-                <input value={p.name} onChange={e => updateProduct(i, "name", e.target.value)}
-                  placeholder="Product name"
-                  required
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors" />
-              </div>
-              <div className="col-span-4 sm:col-span-2">
-                <input type="number" min={1} value={p.qty} onChange={e => updateProduct(i, "qty", parseInt(e.target.value) || 1)}
-                  required
-                  className="w-full px-2 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-center font-mono transition-colors" />
-              </div>
-              <div className="col-span-5 sm:col-span-3">
-                <input type="number" min={0} value={p.price === 0 ? "" : p.price} onChange={e => updateProduct(i, "price", parseInt(e.target.value) || 0)}
-                  placeholder="0"
-                  required
-                  className="w-full px-2 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono transition-colors" />
-              </div>
-              <div className="col-span-3 sm:col-span-2 flex items-center justify-end gap-1">
-                <span className="font-mono text-xs font-semibold text-[#0F172A] flex-1 text-right">
-                  {p.qty * p.price > 0 ? formatPKR(p.qty * p.price) : "—"}
-                </span>
-                {products.length > 1 && (
-                  <button onClick={() => removeProduct(i)} className="p-1 rounded hover:bg-red-50 text-slate-300 hover:text-red-400 transition-colors flex-shrink-0">
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Order Summary */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-[#0F172A] mb-4">Order Summary</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between text-slate-500">
-                <span>Subtotal</span>
-                <span className="font-mono font-medium text-[#0F172A]">{formatPKR(subtotal)}</span>
-              </div>
-              <div className="flex justify-between items-center text-slate-500">
-                <span>Delivery Charges (DC)</span>
-                <div className="w-24">
-                  <input type="number" min={0} value={deliveryCharges || ""} onChange={e => setDeliveryCharges(parseInt(e.target.value) || 0)}
-                    placeholder="0"
-                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono transition-colors" />
+          
+          {existing && (
+            <div className="mx-4 mt-4 p-3 bg-emerald-50 border border-emerald-100 rounded-lg flex items-start gap-2.5 shadow-sm">
+              <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+              <div className="min-w-0">
+                <div className="text-[13px] font-bold text-emerald-800">Existing Customer</div>
+                <div className="text-[11px] text-emerald-700 mt-0.5 flex flex-wrap gap-x-2 gap-y-1">
+                  <span className="font-medium">{existing.customer}</span>
+                  <span>•</span>
+                  <span>{orders.filter(o => o.whatsapp === whatsapp).length} orders</span>
+                  <span>•</span>
+                  <span className="font-semibold">Spent: {formatPKR(orders.filter(o => o.whatsapp === whatsapp).reduce((a, b) => a + b.amount, 0))}</span>
                 </div>
               </div>
-              <div className="flex justify-between border-t border-slate-100 pt-3 font-semibold text-base">
-                <span>Grand Total</span>
-                <span className="font-mono text-[#D4AF37]">{formatPKR(grandTotal)}</span>
+            </div>
+          )}
+
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-12 gap-x-4 gap-y-3">
+            <div className="sm:col-span-4">
+              <FieldInput label="WhatsApp" autoFocus value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="03001234567" maxLength={11} required className="font-mono text-sm py-1.5" />
+            </div>
+            <div className="sm:col-span-4">
+              <FieldInput label="Name" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer Name" required className="text-sm py-1.5" />
+            </div>
+            <div className="sm:col-span-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="block text-sm font-medium text-slate-700">City <span className="text-red-500">*</span></label>
+                <input
+                  list="pakistan-cities"
+                  value={city}
+                  onChange={e => setCity(e.target.value)}
+                  placeholder="Select city"
+                  required
+                  className="block w-full rounded-md border-0 py-1.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] sm:text-sm sm:leading-6 transition-all bg-white"
+                />
+                <datalist id="pakistan-cities">
+                  {(province ? PROVINCE_CITIES[province] : Object.values(PROVINCE_CITIES).flat().sort()).map(c => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+            </div>
+            <div className="sm:col-span-12">
+              <FieldInput label="Complete Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="House, Street, Area..." required className="text-sm py-1.5" />
+            </div>
+            <div className="sm:col-span-6">
+              <FieldSelect label="Province (Optional)" value={province} onChange={e => { setProvince(e.target.value); setCity(""); }} className="text-sm py-1.5">
+                <option value="">Select Province</option>
+                {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+              </FieldSelect>
+            </div>
+            <div className="sm:col-span-6">
+              <FieldInput label="Alternate Phone (Optional)" value={altPhone} onChange={e => setAltPhone(e.target.value)} placeholder="03xxxxxxxxx" className="font-mono text-sm py-1.5" />
+            </div>
+          </div>
+        </div>
+
+        {/* Compact Products Card */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden focus-within:border-slate-300 transition-colors">
+          <div className="px-4 py-2 bg-slate-50/80 border-b border-slate-100 flex justify-between items-center">
+            <div className="font-semibold text-[#0F172A] text-sm flex items-center gap-2">
+              <Package size={14} className="text-slate-400" /> Products
+            </div>
+            <button type="button" onClick={addProduct} className="text-[11px] font-bold text-[#0F172A] bg-white px-2.5 py-1 rounded shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1">
+              <Plus size={12} /> Add Row
+            </button>
+          </div>
+          <div className="p-3">
+            <div className="hidden sm:grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1 mb-1.5">
+              <div className="col-span-6">Item Name</div>
+              <div className="col-span-2 text-center">Qty</div>
+              <div className="col-span-2 text-right">Price</div>
+              <div className="col-span-2 text-right">Total</div>
+            </div>
+            <div className="space-y-1.5">
+              {products.map((p, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 items-center bg-slate-50/50 p-1.5 rounded-lg border border-slate-100/50">
+                  <div className="col-span-12 sm:col-span-6">
+                    <input value={p.name} onChange={e => updateProduct(i, "name", e.target.value)}
+                      placeholder="e.g. King Size Bedsheet" required
+                      className="w-full px-2.5 py-1.5 text-[13px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 bg-white" />
+                  </div>
+                  <div className="col-span-4 sm:col-span-2">
+                    <input type="number" min={1} value={p.qty} onChange={e => updateProduct(i, "qty", e.target.value === "" ? "" : parseInt(e.target.value))} required
+                      className="w-full px-2 py-1.5 text-[13px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-center font-mono bg-white" />
+                  </div>
+                  <div className="col-span-5 sm:col-span-2">
+                    <input type="number" min={0} value={p.price === 0 ? "" : p.price} onChange={e => updateProduct(i, "price", e.target.value === "" ? "" : parseInt(e.target.value))} placeholder="0" required
+                      className="w-full px-2 py-1.5 text-[13px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono bg-white" />
+                  </div>
+                  <div className="col-span-3 sm:col-span-2 flex items-center justify-end gap-2 pr-1">
+                    <span className="font-mono text-[13px] font-bold text-[#0F172A]">
+                      {(Number(p.qty) || 0) * (Number(p.price) || 0) > 0 ? ((Number(p.qty) || 0) * (Number(p.price) || 0)).toLocaleString() : "—"}
+                    </span>
+                    {products.length > 1 && (
+                      <button type="button" onClick={() => removeProduct(i)} className="text-slate-300 hover:text-red-500 transition-colors">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column: Order Summary & Actions */}
+      <div className="w-full lg:w-80 flex-shrink-0">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm sticky top-20 flex flex-col">
+          <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-100 font-semibold text-[#0F172A] text-sm flex items-center gap-2">
+            <Receipt size={14} className="text-slate-400" /> Summary
+          </div>
+          
+          <div className="p-4 space-y-4 flex-1">
+            {/* Totals */}
+            <div className="space-y-2 text-[13px]">
+              <div className="flex justify-between text-slate-500">
+                <span>Subtotal</span>
+                <span className="font-mono font-medium">{formatPKR(subtotal)}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-500">
+                <span>Delivery (DC)</span>
+                <input type="number" min={0} value={deliveryCharges || ""} onChange={e => setDeliveryCharges(parseInt(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-20 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono" />
               </div>
               {advancePayment > 0 && (
-                <>
-                  <div className="flex justify-between pt-1 font-medium text-sm text-emerald-600">
-                    <span>Advance Received</span>
-                    <span className="font-mono">- {formatPKR(advancePayment)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-100 pt-2 mt-2 font-bold text-lg text-rose-600">
-                    <span>{orderType === "COD" ? "Net COD Amount" : "Balance Due"}</span>
-                    <span className="font-mono">{formatPKR(Math.max(0, grandTotal - advancePayment))}</span>
-                  </div>
-                </>
+                <div className="flex justify-between items-center text-emerald-600 font-medium">
+                  <span>Advance</span>
+                  <span className="font-mono">- {formatPKR(advancePayment)}</span>
+                </div>
               )}
-            </div>
-            <div className="mt-6">
-              <label className="text-sm font-medium text-slate-700 mb-2.5 block">Order Type</label>
-              <div className="flex gap-5">
-                {(["COD", "NON-COD"] as const).map(t => (
-                  <label key={t} className="flex items-center gap-2.5 cursor-pointer group">
-                    <input type="radio" name="orderType" value={t} checked={orderType === t}
-                      onChange={() => setOrderType(t)} className="w-4 h-4 accent-[#0F172A] cursor-pointer" />
-                    <span className="text-sm font-medium text-slate-700 group-hover:text-[#0F172A] transition-colors">{t}</span>
-                  </label>
-                ))}
+              <div className="flex justify-between border-t border-slate-100 pt-2 mt-2 font-bold text-base text-[#0F172A]">
+                <span>{orderType === "COD" ? "Net COD" : "Total"}</span>
+                <span className="font-mono text-[#D4AF37]">{formatPKR(Math.max(0, grandTotal - advancePayment))}</span>
               </div>
             </div>
-            <div className="mt-5 flex flex-col sm:flex-row gap-5">
-              <div className="flex-1">
-                <label className="text-sm font-medium text-slate-700 mb-2.5 block">Payment Type</label>
-                <div className="flex gap-5">
-                  {(["Online", "Courier"] as const).map(t => (
-                    <label key={t} className="flex items-center gap-2.5 cursor-pointer group">
-                      <input type="radio" name="paymentType" value={t} checked={paymentType === t}
-                        onChange={() => setPaymentType(t)} className="w-4 h-4 accent-[#0F172A] cursor-pointer" />
-                      <span className="text-sm font-medium text-slate-700 group-hover:text-[#0F172A] transition-colors">{t}</span>
-                    </label>
+
+            <div className="w-full h-px bg-slate-100" />
+
+            {/* Quick Toggles */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Type</label>
+                <div className="flex bg-slate-100 p-1 rounded-lg">
+                  {(["COD", "NON-COD"] as const).map(t => (
+                    <button key={t} type="button" onClick={() => setOrderType(t)}
+                      className={cn(
+                        "flex-1 py-1 text-[11px] font-bold rounded transition-colors",
+                        orderType === t ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-black/5" : "text-slate-500 hover:text-slate-700"
+                      )}>
+                      {t}
+                    </button>
                   ))}
                 </div>
               </div>
-              <div className="w-32">
-                <label className="text-sm font-medium text-slate-700 mb-2 block">Advance (Rs)</label>
-                <input type="number" min={0} value={advancePayment || ""} onChange={e => setAdvancePayment(parseInt(e.target.value) || 0)}
-                  placeholder="0"
-                  className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono transition-colors" />
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Advance via</label>
+                <div className="flex bg-slate-100 p-1 rounded-lg">
+                  {(["Online", "Courier"] as const).map(t => (
+                    <button key={t} type="button" onClick={() => setPaymentType(t)}
+                      className={cn(
+                        "flex-1 py-1 text-[11px] font-bold rounded transition-colors",
+                        paymentType === t ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-black/5" : "text-slate-500 hover:text-slate-700"
+                      )}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Advance Amount</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono">Rs</span>
+                <input type="number" min={0} value={advancePayment || ""} onChange={e => setAdvancePayment(parseInt(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Notes</label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+                placeholder="Special instructions..."
+                className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 resize-none" />
+            </div>
           </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700 mb-1.5 block">Notes</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4}
-              placeholder="Special instructions, fragile items, call before delivery..."
-              className="w-full px-3.5 py-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] resize-none transition-colors" />
+
+          <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col gap-2 rounded-b-xl">
+            <button onClick={handleSave} className="w-full py-2.5 bg-[#0F172A] hover:bg-[#1E293B] text-white rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors">
+              {saved ? <><Check size={16} /> Saved!</> : <><Save size={16} /> Save Order</>}
+            </button>
+            <button onClick={() => setShowPrint(true)} className="w-full py-2 bg-white hover:bg-slate-50 text-[#0F172A] border border-slate-200 rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors">
+              <Printer size={16} /> Save & Print
+            </button>
           </div>
         </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <Btn size="lg" className="sm:flex-1" onClick={handleSave}>
-          {saved ? <><Check size={15} /> Saved!</> : <><Save size={15} /> Save Order</>}
-        </Btn>
-        <Btn size="lg" variant="secondary" className="sm:flex-1" onClick={() => setShowPrint(true)}>
-          <Printer size={15} /> Save & Print Label
-        </Btn>
-        <Btn size="lg" variant="ghost" onClick={() => setScreen("orders")}>Cancel</Btn>
       </div>
 
       {/* Print Modal */}
@@ -2741,7 +2803,13 @@ function DailyClosingScreen({ orders }: { orders: Order[] }) {
 
 export default function App() {
   const queryClient = useQueryClient();
-  const [screen, setScreen] = useState<Screen>("dashboard");
+  const [screen, setScreenState] = useState<Screen>("dashboard");
+  
+  const setScreen = (s: Screen) => {
+    setScreenState(s);
+    if (typeof window !== "undefined") localStorage.setItem("currentScreen", s);
+  };
+  
   const [mounted, setMounted] = useState(false);
   
   // Offline State
@@ -2753,7 +2821,7 @@ export default function App() {
     setMounted(true);
     if (typeof window !== "undefined") {
       const savedScreen = localStorage.getItem("currentScreen") as Screen;
-      if (savedScreen) setScreen(savedScreen);
+      if (savedScreen) setScreenState(savedScreen);
       
       setIsOffline(!navigator.onLine);
       const savedOffline = localStorage.getItem("offline_orders");
@@ -2771,10 +2839,6 @@ export default function App() {
       };
     }
   }, []);
-
-  useEffect(() => {
-    if (mounted) localStorage.setItem("currentScreen", screen);
-  }, [screen, mounted]);
   
   const saveOrderOffline = (order: Order) => {
     setOfflineOrders(prev => {
@@ -2998,6 +3062,8 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  if (!mounted) return null;
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] overflow-hidden">
