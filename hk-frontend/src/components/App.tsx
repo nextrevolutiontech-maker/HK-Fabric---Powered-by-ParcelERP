@@ -635,7 +635,7 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
       <div className="flex flex-wrap gap-2">
         <Btn onClick={() => setScreen("create-order")}><Plus size={14} /> New Order</Btn>
         <Btn variant="secondary" onClick={() => setScreen("tracking")}><Truck size={14} /> Add Tracking</Btn>
-        <Btn variant="secondary" onClick={() => setScreen("cod")}><Banknote size={14} /> Receive COD</Btn>
+        <Btn variant="secondary" className="hover:bg-slate-800 hover:text-white" onClick={() => setScreen("cod")}><Banknote size={14} /> Receive COD</Btn>
       </div>
 
       <div className="flex flex-col gap-6">
@@ -1130,7 +1130,7 @@ function CreateOrderScreen({
                     <button key={t} type="button" onClick={() => setOrderType(t)}
                       className={cn(
                         "flex-1 py-1 text-[11px] font-bold rounded transition-colors",
-                        orderType === t ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-black/5" : "text-slate-500 hover:text-slate-700"
+                        orderType === t ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-black/5" : "text-slate-500 hover:bg-slate-800 hover:text-white"
                       )}>
                       {t}
                     </button>
@@ -1223,6 +1223,12 @@ function CreateOrderScreen({
         <div className="flex gap-3 mt-4">
           <Btn className="flex-1" onClick={() => { handleSave(); setShowPrint(false); }}>
             <Printer size={14} /> Print Label
+          </Btn>
+          <Btn variant="secondary" className="flex-1" onClick={() => {
+              const text = encodeURIComponent(`*Order Details*\nOrder No: ${orderIdToSave}\nCustomer: ${customerName}\nAddress: ${address}, ${city}\nCOD Amount: Rs ${Math.max(0, grandTotal - advancePayment)}`);
+              window.open(`https://wa.me/${whatsapp.replace(/^0/, '92')}?text=${text}`, '_blank');
+          }}>
+            Share on WhatsApp
           </Btn>
           <Btn variant="secondary" onClick={() => setShowPrint(false)}>Cancel</Btn>
         </div>
@@ -1451,7 +1457,7 @@ function OrdersScreen({
                     <td className="px-6 py-4"><StatusBadge status={status} /></td>
                     <td className="px-6 py-4 text-sm text-slate-500 hidden lg:table-cell whitespace-nowrap">{o.date}</td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                         <button onClick={() => onViewOrder(o.id)}
                           className="p-1.5 rounded-md hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-sm text-slate-400 hover:text-[#0F172A] transition-all" title="View">
                           <Eye size={14} />
@@ -1561,6 +1567,12 @@ function OrdersScreen({
               <div className="flex gap-3 mt-4">
                 <Btn className="flex-1" onClick={() => setPrintOrderId(null)}>
                   <Printer size={14} /> Print Label
+                </Btn>
+                <Btn variant="secondary" className="flex-1" onClick={() => {
+                  const text = encodeURIComponent(`*Order Details*\nOrder No: ${o.id}\nCustomer: ${o.customer}\nAddress: ${o.address}, ${o.city}\nCOD Amount: Rs ${Math.max(0, o.amount - (o.advancePayment || 0))}`);
+                  window.open(`https://wa.me/${o.whatsapp.replace(/^0/, '92')}?text=${text}`, '_blank');
+                }}>
+                  Share on WhatsApp
                 </Btn>
                 <Btn variant="secondary" onClick={() => setPrintOrderId(null)}>Cancel</Btn>
               </div>
@@ -1692,6 +1704,12 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
         <div className="flex gap-3 mt-4">
           <Btn className="flex-1" onClick={() => setShowPrint(false)}>
             <Printer size={14} /> Print Label
+          </Btn>
+          <Btn variant="secondary" className="flex-1" onClick={() => {
+              const text = encodeURIComponent(`*Order Details*\nOrder No: ${o.id}\nCustomer: ${o.customer}\nAddress: ${o.address}, ${o.city}\nCOD Amount: Rs ${Math.max(0, o.amount - (o.advancePayment || 0))}`);
+              window.open(`https://wa.me/${o.whatsapp.replace(/^0/, '92')}?text=${text}`, '_blank');
+          }}>
+            Share on WhatsApp
           </Btn>
           <Btn variant="secondary" onClick={() => setShowPrint(false)}>Cancel</Btn>
         </div>
@@ -2807,7 +2825,10 @@ export default function App() {
   
   const setScreen = (s: Screen) => {
     setScreenState(s);
-    if (typeof window !== "undefined") localStorage.setItem("currentScreen", s);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("currentScreen", s);
+      window.history.pushState({ screen: s }, "", `#${s}`);
+    }
   };
   
   const [mounted, setMounted] = useState(false);
@@ -2820,8 +2841,24 @@ export default function App() {
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
-      const savedScreen = localStorage.getItem("currentScreen") as Screen;
-      if (savedScreen) setScreenState(savedScreen);
+      const savedScreen = (localStorage.getItem("currentScreen") as Screen) || "dashboard";
+      setScreenState(savedScreen);
+      // Replace initial state so the first back press doesn't exit the app immediately
+      window.history.replaceState({ screen: savedScreen }, "", `#${savedScreen}`);
+      
+      const handlePopState = (e: PopStateEvent) => {
+        if (e.state && e.state.screen) {
+          setScreenState(e.state.screen);
+          localStorage.setItem("currentScreen", e.state.screen);
+        } else {
+          const hash = window.location.hash.replace('#', '') as Screen;
+          if (hash) {
+            setScreenState(hash);
+            localStorage.setItem("currentScreen", hash);
+          }
+        }
+      };
+      window.addEventListener("popstate", handlePopState);
       
       setIsOffline(!navigator.onLine);
       const savedOffline = localStorage.getItem("offline_orders");
@@ -2834,6 +2871,7 @@ export default function App() {
       window.addEventListener("online", handleOnline);
       window.addEventListener("offline", handleOffline);
       return () => {
+        window.removeEventListener("popstate", handlePopState);
         window.removeEventListener("online", handleOnline);
         window.removeEventListener("offline", handleOffline);
       };
@@ -3024,8 +3062,30 @@ export default function App() {
   const handleSaveOrder = (newOrder: Order) => {
     const existing = orders.find((o: any) => o.id === newOrder.id);
     if (existing) {
-      // Currently not handling deep item updates via PATCH.
-      alert("Editing existing orders fully requires expanded API support.");
+      const payload = {
+        customerDetails: {
+          name: newOrder.customer,
+          phone: newOrder.whatsapp,
+          city: newOrder.city,
+          address: newOrder.address,
+        },
+        handledBy: newOrder.handledBy,
+        orderType: newOrder.type,
+        totalAmount: newOrder.amount,
+        advancePayment: newOrder.advancePayment || 0,
+        paymentType: newOrder.paymentType || "Courier",
+        items: newOrder.products.map((p: any) => ({
+          productName: p.name,
+          qty: p.qty,
+          unitPrice: p.price,
+          lineTotal: p.qty * p.price
+        })),
+        notes: newOrder.notes,
+        actionName: "Full Order Edit",
+        status: newOrder.status,
+        codStatus: newOrder.codStatus,
+      };
+      updateOrderMut.mutate({ id: newOrder.id, data: payload });
     } else {
       createOrderMut.mutate(newOrder);
     }

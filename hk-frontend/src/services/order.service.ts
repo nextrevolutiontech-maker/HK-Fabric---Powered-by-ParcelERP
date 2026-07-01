@@ -104,7 +104,10 @@ export const OrderService = {
    * @param data Update details
    */
   async updateOrder(id: string, data: any) {
-    const { status, codStatus, trackingNumber, courierName, voidReason, notes, actionName, performedBy, pin } = data;
+    const { 
+      status, codStatus, trackingNumber, courierName, voidReason, notes, actionName, performedBy, pin,
+      customerDetails, handledBy, orderType, totalAmount, advancePayment, paymentType, items
+    } = data;
 
     if (status === 'void' || status === 'VOID') {
       const settings = await prisma.setting.findFirst();
@@ -113,12 +116,54 @@ export const OrderService = {
       }
     }
 
+    let customerId = data.customerId;
+
+    if (!customerId && customerDetails && customerDetails.phone) {
+      const customer = await prisma.customer.upsert({
+        where: { phone: customerDetails.phone },
+        update: {
+          name: customerDetails.name,
+          city: customerDetails.city,
+          address: customerDetails.address,
+        },
+        create: {
+          phone: customerDetails.phone,
+          name: customerDetails.name,
+          city: customerDetails.city,
+          address: customerDetails.address,
+        }
+      });
+      customerId = customer.id;
+    }
+
     // Build update data
     const updateData: any = {};
-    if (status) updateData.status = status;
-    if (codStatus) updateData.codStatus = codStatus;
-    if (voidReason) updateData.voidReason = voidReason;
-    if (notes) updateData.notes = notes;
+    if (status !== undefined) updateData.status = status;
+    if (codStatus !== undefined) updateData.codStatus = codStatus;
+    if (voidReason !== undefined) updateData.voidReason = voidReason;
+    if (notes !== undefined) updateData.notes = notes;
+    if (handledBy !== undefined) updateData.handledBy = handledBy;
+    if (orderType !== undefined) updateData.orderType = orderType;
+    if (totalAmount !== undefined) updateData.totalAmount = totalAmount;
+    if (advancePayment !== undefined) updateData.advancePayment = advancePayment;
+    if (paymentType !== undefined) updateData.paymentType = paymentType;
+    if (customerId !== undefined) updateData.customerId = customerId;
+
+    if (items && Array.isArray(items)) {
+      // First delete existing items
+      await prisma.orderItem.deleteMany({
+        where: { orderId: id }
+      });
+      // Then recreate them
+      updateData.items = {
+        create: items.map((item: any) => ({
+          productName: item.productName,
+          qty: item.qty,
+          unitPrice: item.unitPrice,
+          lineTotal: item.lineTotal,
+        }))
+      };
+    }
 
     // Update order
     const updatedOrder = await prisma.order.update({
