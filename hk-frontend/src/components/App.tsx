@@ -1547,6 +1547,7 @@ function OrdersScreen({
                   <div className="flex justify-between"><span className="text-slate-400">Handled By:</span><span>{o.handledBy}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Customer:</span><span>{o.customer}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">WhatsApp:</span><span>{o.whatsapp}</span></div>
+                  {o.province && <div className="flex justify-between"><span className="text-slate-400">Province:</span><span>{o.province}</span></div>}
                   <div className="flex justify-between"><span className="text-slate-400">City:</span><span>{o.city}</span></div>
                   <div className="pt-1"><span className="text-slate-400">Address: </span><span>{o.address}</span></div>
                   {o.advancePayment && o.advancePayment > 0 ? (
@@ -1600,6 +1601,7 @@ function OrdersScreen({
                   <div className="flex justify-between"><span className="text-slate-400">Handled By:</span><span>{o.handledBy}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Customer:</span><span>{o.customer}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">WhatsApp:</span><span>{o.whatsapp}</span></div>
+                  {o.province && <div className="flex justify-between"><span className="text-slate-400">Province:</span><span>{o.province}</span></div>}
                   <div className="flex justify-between"><span className="text-slate-400">City:</span><span>{o.city}</span></div>
                   <div className="pt-1"><span className="text-slate-400">Address: </span><span>{o.address}</span></div>
                   {o.advancePayment && o.advancePayment > 0 ? (
@@ -2240,8 +2242,8 @@ function SettlementsScreen() {
         const result = await Tesseract.recognize(file, 'eng');
         const text = result.data.text;
         
-        // Extract tracking numbers: length 8 to 15, alphanumeric
-        const trackingRegex = /\b[A-Z0-9]{8,15}\b/gi;
+        // Extract tracking numbers: length 8 to 25, alphanumeric with hyphens
+        const trackingRegex = /\b[A-Z0-9-]{8,25}\b/gi;
         const matches = text.match(trackingRegex) || [];
         // Filter out obvious non-tracking stuff like just dates or pure low numbers
         const potentialTrackings = Array.from(new Set(matches)).filter(t => t.length > 7);
