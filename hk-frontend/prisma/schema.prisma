@@ -45,6 +45,7 @@ model Order {
   isLabelPrinted   Boolean  @default(false)
   voidReason       String?
   notes            String?
+  deliveryCharges  Float    @default(0)
   advancePayment   Float    @default(0)
   paymentType      String   @default("Courier")
   createdAt        DateTime @default(now())

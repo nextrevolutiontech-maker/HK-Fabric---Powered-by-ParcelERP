@@ -24,7 +24,7 @@ export const OrderService = {
   async createOrder(data: any) {
     const { 
       orderNo, customerDetails, handledBy, orderType, totalAmount, 
-      advancePayment, paymentType, items, notes 
+      advancePayment, paymentType, items, notes, deliveryCharges 
     } = data;
 
     let customerId = data.customerId;
@@ -55,6 +55,7 @@ export const OrderService = {
         handledBy,
         orderType,
         totalAmount,
+        deliveryCharges,
         advancePayment,
         paymentType,
         notes,
@@ -105,8 +106,8 @@ export const OrderService = {
    */
   async updateOrder(id: string, data: any) {
     const { 
-      status, codStatus, trackingNumber, courierName, voidReason, notes, actionName, performedBy, pin,
-      customerDetails, handledBy, orderType, totalAmount, advancePayment, paymentType, items
+      status, codStatus, trackingNumber, trackingNumber2, courierName, voidReason, notes, actionName, performedBy, pin,
+      customerDetails, handledBy, orderType, totalAmount, advancePayment, paymentType, items, deliveryCharges
     } = data;
 
     if (status === 'void' || status === 'VOID') {
@@ -145,17 +146,14 @@ export const OrderService = {
     if (handledBy !== undefined) updateData.handledBy = handledBy;
     if (orderType !== undefined) updateData.orderType = orderType;
     if (totalAmount !== undefined) updateData.totalAmount = totalAmount;
+    if (deliveryCharges !== undefined) updateData.deliveryCharges = deliveryCharges;
     if (advancePayment !== undefined) updateData.advancePayment = advancePayment;
     if (paymentType !== undefined) updateData.paymentType = paymentType;
     if (customerId !== undefined) updateData.customerId = customerId;
 
     if (items && Array.isArray(items)) {
-      // First delete existing items
-      await prisma.orderItem.deleteMany({
-        where: { orderId: id }
-      });
-      // Then recreate them
       updateData.items = {
+        deleteMany: {},
         create: items.map((item: any) => ({
           productName: item.productName,
           qty: item.qty,
@@ -177,6 +175,15 @@ export const OrderService = {
         data: {
           orderId: id,
           trackingNumber,
+          courierName,
+        }
+      });
+    }
+    if (trackingNumber2 && courierName) {
+      await prisma.trackingEntry.create({
+        data: {
+          orderId: id,
+          trackingNumber: trackingNumber2,
           courierName,
         }
       });

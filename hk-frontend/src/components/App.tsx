@@ -7,7 +7,7 @@ import {
   BarChart2, ClipboardList, Settings, Search, Bell, Menu, X,
   Eye, Edit2, Printer, Ban, CheckCircle2, Clock, AlertTriangle,
   TrendingUp, Upload, Download, User, Save, ArrowLeft, Check,
-  AlertCircle, ChevronRight, Layers,
+  AlertCircle, ChevronRight, Layers, XCircle,
 } from "lucide-react";
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -30,7 +30,7 @@ interface Order {
   id: string; customer: string; whatsapp: string; city: string;
   address: string; amount: number; handledBy: "Sami" | "Abid";
   status: OrderStatus; codStatus: CODStatus; date: string;
-  courier?: string; trackingNo?: string; products: Product[];
+  courier?: string; trackingNo?: string; trackingNo2?: string; products: Product[];
   notes?: string; type: "COD" | "NON-COD";
   province?: string;
   deliveryCharges?: number;
@@ -409,6 +409,24 @@ function Header({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSea
       </button>
 
       <div className="ml-auto flex items-center gap-3">
+        <div className="hidden md:flex items-center gap-2 mr-2">
+          <a 
+            href="https://postextracking.com.pk/" 
+            target="_blank" 
+            rel="noreferrer" 
+            className="text-[11px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1.5 rounded-md transition-colors border border-indigo-100 shadow-sm"
+          >
+            PostEx Tracking
+          </a>
+          <a 
+            href="https://ep.gov.pk/track.asp" 
+            target="_blank" 
+            rel="noreferrer" 
+            className="text-[11px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md transition-colors border border-emerald-100 shadow-sm"
+          >
+            Pak Post Tracking
+          </a>
+        </div>
         <div className="hidden md:flex flex-col items-end">
           <span className="text-[11px] text-slate-400 leading-none">{dateStr}</span>
           <span className="text-sm font-mono font-semibold text-[#0F172A] mt-0.5 leading-none">{timeStr}</span>
@@ -569,7 +587,7 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
   const receivedCOD = orders.filter(o => o.codStatus === "received").reduce((a, b) => a + b.amount, 0);
   const todayRevenue = todayOrders.reduce((a, b) => a + b.amount, 0);
   const voidOrders = orders.filter(o => o.status === "void").length;
-  const hasPendingSettlements = true; // Alerts for settlements waiting for approval
+  const hasPendingSettlements = false; // Set to false since settlements are handled synchronously
 
   return (
     <div className="space-y-5">
@@ -1012,7 +1030,12 @@ function CreateOrderScreen({
                 <input
                   list="pakistan-cities"
                   value={city}
-                  onChange={e => setCity(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setCity(val);
+                    const foundProv = Object.entries(PROVINCE_CITIES).find(([_, cities]) => cities.some(c => c.toLowerCase() === val.toLowerCase()));
+                    if (foundProv) setProvince(foundProv[0]);
+                  }}
                   placeholder="Select city"
                   required
                   className="block w-full rounded-md border-0 py-1.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] sm:text-sm sm:leading-6 transition-all bg-white"
@@ -1026,7 +1049,9 @@ function CreateOrderScreen({
               <FieldInput label="Complete Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="House, Street, Area..." required className="text-sm py-1.5" />
             </div>
             <div className="sm:col-span-6">
-              <FieldSelect label="Province (Optional)" value={province} onChange={e => { setProvince(e.target.value); setCity(""); }} className="text-sm py-1.5">
+              <FieldSelect label="Province (Optional)" value={province} onChange={e => { 
+                setProvince(e.target.value); 
+              }} className="text-sm py-1.5">
                 <option value="">Select Province</option>
                 {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
               </FieldSelect>
@@ -1103,8 +1128,7 @@ function CreateOrderScreen({
               </div>
               <div className="flex justify-between items-center text-slate-500">
                 <span>Delivery (DC)</span>
-                <input type="number" min={0} value={deliveryCharges || ""} onChange={e => setDeliveryCharges(parseInt(e.target.value) || 0)}
-                  placeholder="0"
+                <input type="number" min={0} value={deliveryCharges} onChange={e => setDeliveryCharges(parseInt(e.target.value) || 0)}
                   className="w-20 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono" />
               </div>
               {advancePayment > 0 && (
@@ -1157,8 +1181,7 @@ function CreateOrderScreen({
               <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Advance Amount</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono">Rs</span>
-                <input type="number" min={0} value={advancePayment || ""} onChange={e => setAdvancePayment(parseInt(e.target.value) || 0)}
-                  placeholder="0"
+                <input type="number" min={0} value={advancePayment} onChange={e => setAdvancePayment(parseInt(e.target.value) || 0)}
                   className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors" />
               </div>
             </div>
@@ -1188,6 +1211,10 @@ function CreateOrderScreen({
           <div className="text-center mb-3 pb-3 border-b border-slate-200">
             <div className="text-base font-bold text-[#0F172A]">HK FABRIC</div>
             <div className="text-[10px] text-slate-400 mt-0.5">Bedsheets & Home Textiles</div>
+            <div className="text-[10px] text-slate-400 mt-1">
+              Branch 1: Shop No 55, Muhammadi Market, Haidry Block G, Karachi<br/>
+              Branch 2: Shop No 39, Saima Shopping Centre, Opp. Al Madni Mall
+            </div>
           </div>
           <div className="space-y-1.5">
             <div className="flex justify-between"><span className="text-slate-400">Order No:</span><span className="font-bold">{orderIdToSave}</span></div>
@@ -1207,7 +1234,7 @@ function CreateOrderScreen({
             )}
             {advancePayment > 0 && (
               <div className="flex justify-between pt-1 text-xs">
-                <span className="text-slate-400">Advance ({paymentType}):</span>
+                <span className="text-slate-400">Advance:</span>
                 <span className="font-mono font-medium">{formatPKR(advancePayment)}</span>
               </div>
             )}
@@ -1215,9 +1242,6 @@ function CreateOrderScreen({
               <span className="font-bold text-sm">{orderType === "COD" ? "COD Amount:" : "Total Amount:"}</span>
               <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(Math.max(0, grandTotal - advancePayment))}</span>
             </div>
-          </div>
-          <div className="mt-3 flex justify-center">
-            <div className="w-20 h-20 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400">QR Code</div>
           </div>
         </div>
         <div className="flex gap-3 mt-4">
@@ -1252,7 +1276,7 @@ function OrdersScreen({
   orders: Order[];
   onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
 }) {
-  const [dateFilter, setDateFilter] = useState("today");
+  const [dateFilter, setDateFilter] = useState("all");
   const [handledFilter, setHandledFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [courierFilter, setCourierFilter] = useState("all");
@@ -1285,9 +1309,9 @@ function OrdersScreen({
     
     // Date
     const orderDate = new Date(o.date);
-    const today = new Date("2026-06-20");
+    const today = new Date(); // Use actual current date
     if (dateFilter === "today") {
-      if (o.date !== "2026-06-20") return false;
+      if (orderDate.toDateString() !== today.toDateString()) return false;
     } else if (dateFilter === "week") {
       const oneWeekAgo = new Date(today);
       oneWeekAgo.setDate(today.getDate() - 7);
@@ -1330,13 +1354,13 @@ function OrdersScreen({
 
       {/* Date tabs */}
       <div className="flex gap-1 bg-slate-100/50 rounded-lg p-1 w-fit flex-wrap border border-slate-200/50">
-        {["today", "week", "month", "year", "custom"].map(f => (
+        {["all", "today", "week", "month", "year", "custom"].map(f => (
           <button key={f} onClick={() => setDateFilter(f)}
             className={cn(
               "px-3.5 py-1.5 rounded-md text-sm font-medium transition-all capitalize",
               dateFilter === f ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-slate-200/60" : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
             )}>
-            {f === "custom" ? "Custom Date" : f}
+            {f === "all" ? "All Time" : f === "custom" ? "Custom Date" : f}
           </button>
         ))}
       </div>
@@ -1364,7 +1388,6 @@ function OrdersScreen({
           className="px-3.5 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors hover:border-slate-300">
           <option value="all">All Status</option>
           <option value="pending">Pending</option>
-          <option value="processing">Processing</option>
           <option value="shipped">Shipped</option>
           <option value="delivered">Delivered</option>
           <option value="returned">Returned</option>
@@ -1374,7 +1397,7 @@ function OrdersScreen({
         <select value={courierFilter} onChange={e => setCourierFilter(e.target.value)}
           className="px-3.5 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors hover:border-slate-300">
           <option value="all">All Couriers</option>
-          {["TCS","PostEx","Leopard","M&P","Other"].map(c => <option key={c} value={c}>{c}</option>)}
+          {["TCS","PostEx","Leopard","M&P","Pakistan Post","Other"].map(c => <option key={c} value={c}>{c}</option>)}
         </select>
 
         <select value={codStatusFilter} onChange={e => setCODStatusFilter(e.target.value)}
@@ -1537,8 +1560,13 @@ function OrdersScreen({
             <>
               <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 bg-white font-mono text-xs">
                 <div className="text-center mb-3 pb-3 border-b border-slate-200">
-                  <div className="text-base font-bold text-[#0F172A]">HK FABRIC</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">Bedsheets & Home Textiles</div>
+                  <div className="text-base font-bold text-[#0F172A] tracking-wide">HK FABRICS</div>
+                  <div className="text-[10px] text-slate-500 font-medium mt-0.5">Imported Blankets & Fancy Bed Sheets</div>
+                  <div className="text-[9px] text-slate-400 mt-1.5 leading-snug">
+                    Shop 55, Muhammadi Shopping Center, Block G<br/>
+                    Haidery Market, North Nazimabad, Karachi<br/>
+                    <span className="font-medium text-slate-500 mt-0.5 inline-block">0313-2224398 (Abid) &nbsp;|&nbsp; 0333-3045232 (Sami)</span>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex justify-between"><span className="text-slate-400">Order No:</span><span className="font-bold">{o.id}</span></div>
@@ -1561,9 +1589,7 @@ function OrdersScreen({
                     <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(Math.max(0, o.amount - (o.advancePayment || 0)))}</span>
                   </div>
                 </div>
-                <div className="mt-3 flex justify-center">
-                  <div className="w-20 h-20 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400">QR Code</div>
-                </div>
+
               </div>
               <div className="flex gap-3 mt-4">
                 <Btn className="flex-1" onClick={() => setPrintOrderId(null)}>
@@ -1591,8 +1617,13 @@ function OrdersScreen({
             return (
               <div key={o.id} className="border-2 border-dashed border-slate-200 rounded-lg p-4 bg-white font-mono text-xs mb-4">
                 <div className="text-center mb-3 pb-3 border-b border-slate-200">
-                  <div className="text-base font-bold text-[#0F172A]">HK FABRIC</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">Bedsheets & Home Textiles</div>
+                  <div className="text-base font-bold text-[#0F172A] tracking-wide">HK FABRICS</div>
+                  <div className="text-[10px] text-slate-500 font-medium mt-0.5">Imported Blankets & Fancy Bed Sheets</div>
+                  <div className="text-[9px] text-slate-400 mt-1.5 leading-snug">
+                    Shop 55, Muhammadi Shopping Center, Block G<br/>
+                    Haidery Market, North Nazimabad, Karachi<br/>
+                    <span className="font-medium text-slate-500 mt-0.5 inline-block">0313-2224398 (Abid) &nbsp;|&nbsp; 0333-3045232 (Sami)</span>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex justify-between"><span className="text-slate-400">Order No:</span><span className="font-bold">{o.id}</span></div>
@@ -1615,9 +1646,7 @@ function OrdersScreen({
                     <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(Math.max(0, o.amount - (o.advancePayment || 0)))}</span>
                   </div>
                 </div>
-                <div className="mt-3 flex justify-center">
-                  <div className="w-16 h-16 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400">QR Code</div>
-                </div>
+
               </div>
             );
           })}
@@ -1669,8 +1698,13 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
       <Modal open={showPrint} onClose={() => setShowPrint(false)} title="Parcel Label Preview">
         <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 bg-white font-mono text-xs">
           <div className="text-center mb-3 pb-3 border-b border-slate-200">
-            <div className="text-base font-bold text-[#0F172A]">HK FABRIC</div>
-            <div className="text-[10px] text-slate-400 mt-0.5">Bedsheets & Home Textiles</div>
+            <div className="text-base font-bold text-[#0F172A] tracking-wide">HK FABRICS</div>
+            <div className="text-[10px] text-slate-500 font-medium mt-0.5">Imported Blankets & Fancy Bed Sheets</div>
+            <div className="text-[9px] text-slate-400 mt-1.5 leading-snug">
+              Shop 55, Muhammadi Shopping Center, Block G<br/>
+              Haidery Market, North Nazimabad, Karachi<br/>
+              <span className="font-medium text-slate-500 mt-0.5 inline-block">0313-2224398 (Abid) &nbsp;|&nbsp; 0333-3045232 (Sami)</span>
+            </div>
           </div>
           <div className="space-y-1.5">
             <div className="flex justify-between"><span className="text-slate-400">Order No:</span><span className="font-bold">{o.id}</span></div>
@@ -1699,9 +1733,7 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
               <span className="font-bold text-sm text-[#D4AF37]">{formatPKR(Math.max(0, o.amount - (o.advancePayment || 0)))}</span>
             </div>
           </div>
-          <div className="mt-3 flex justify-center">
-            <div className="w-20 h-20 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400">QR Code</div>
-          </div>
+
         </div>
         <div className="flex gap-3 mt-4">
           <Btn className="flex-1" onClick={() => setShowPrint(false)}>
@@ -1756,15 +1788,21 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
                     <span className="font-mono text-sm font-semibold text-[#0F172A]">{formatPKR(p.qty * p.price)}</span>
                   </div>
                 ))}
-                {o.deliveryCharges && o.deliveryCharges > 0 && (
+                {o.deliveryCharges ? (
                   <div className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0 -mx-6 px-6 transition-colors">
                     <div className="text-sm font-medium text-slate-900">Delivery Charges</div>
                     <span className="font-mono text-sm font-semibold text-[#0F172A]">{formatPKR(o.deliveryCharges)}</span>
                   </div>
-                )}
+                ) : null}
+                {o.advancePayment && o.advancePayment > 0 ? (
+                  <div className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0 -mx-6 px-6 transition-colors">
+                    <div className="text-sm font-medium text-slate-900">Advance Payment</div>
+                    <span className="font-mono text-sm font-semibold text-emerald-600">-{formatPKR(o.advancePayment)}</span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between items-center pt-5 mt-2 font-semibold">
-                  <span className="text-sm text-slate-600">Grand Total</span>
-                  <span className="font-mono text-[#D4AF37] text-xl">{formatPKR(o.amount)}</span>
+                  <span className="text-sm text-slate-600">{o.type === "COD" ? "Net COD Amount" : "Grand Total"}</span>
+                  <span className="font-mono text-[#D4AF37] text-xl">{formatPKR(Math.max(0, o.amount - (o.advancePayment || 0)))}</span>
                 </div>
               </div>
             </div>
@@ -1799,7 +1837,7 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
             <h3 className="text-sm font-semibold text-[#0F172A] mb-4 flex items-center gap-2"><Banknote size={15} className="text-slate-400" /> COD Details</h3>
             <div className="space-y-4 text-sm">
               <div><div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Type</div><div className="font-medium text-slate-900">{o.type}</div></div>
-              <div><div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Amount</div><div className="font-mono font-bold text-[#D4AF37] text-lg">{formatPKR(o.amount)}</div></div>
+              <div><div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Amount</div><div className="font-mono font-bold text-[#D4AF37] text-lg">{formatPKR(Math.max(0, o.amount - (o.advancePayment || 0)))}</div></div>
               <div><div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Status</div><div className="mt-1"><StatusBadge status={o.codStatus} /></div></div>
             </div>
           </div>
@@ -1835,21 +1873,21 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
 
 // ─── Tracking Screen ──────────────────────────────────────────────────────────
 
-function TrackingScreen({ orders, onSaveTracking }: { orders: Order[]; onSaveTracking: (id: string, courier: string, no: string) => void }) {
+function TrackingScreen({ orders, onSaveTracking, onUpdateStatus }: { orders: Order[]; onSaveTracking: (id: string, courier: string, no: string, no2?: string) => void; onUpdateStatus: (id: string, status: OrderStatus) => void; }) {
   const [tab, setTab] = useState<"awaiting" | "added">("awaiting");
-  const [inputs, setInputs] = useState<Record<string, { courier: string; no: string }>>({});
+  const [inputs, setInputs] = useState<Record<string, { courier: string; no: string; no2?: string }>>({});
   const [saved, setSaved] = useState<Set<string>>(new Set());
 
   const awaiting = orders.filter(o => !o.trackingNo && o.status !== "void" && !saved.has(o.id));
-  const added = [...orders.filter(o => !!o.trackingNo), ...orders.filter(o => saved.has(o.id))];
+  const added = orders.filter(o => !!o.trackingNo || saved.has(o.id));
 
   const set = (id: string, field: string, val: string) =>
-    setInputs(prev => ({ ...prev, [id]: { courier: prev[id]?.courier || "", no: prev[id]?.no || "", [field]: val } }));
+    setInputs(prev => ({ ...prev, [id]: { courier: prev[id]?.courier || "", no: prev[id]?.no || "", no2: prev[id]?.no2 || "", [field]: val } }));
 
   const handleSave = (id: string) => {
     const data = inputs[id];
     if (data?.courier && data?.no) {
-      onSaveTracking(id, data.courier, data.no);
+      onSaveTracking(id, data.courier, data.no, data.no2);
       setSaved(prev => new Set([...prev, id]));
       setInputs(prev => { const n = { ...prev }; delete n[id]; return n; });
     }
@@ -1911,7 +1949,7 @@ function TrackingScreen({ orders, onSaveTracking }: { orders: Order[]; onSaveTra
                             onChange={e => set(o.id, "courier", e.target.value)}
                             className="w-full px-2.5 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 transition-colors">
                             <option value="">Select</option>
-                            {["TCS","PostEx","Leopard","M&P","Other"].map(c => <option key={c}>{c}</option>)}
+                            {["TCS","PostEx","Leopard","M&P","Pakistan Post","Other"].map(c => <option key={c}>{c}</option>)}
                           </select>
                         </td>
                         <td className="px-6 py-4">
@@ -1919,6 +1957,12 @@ function TrackingScreen({ orders, onSaveTracking }: { orders: Order[]; onSaveTra
                             onChange={e => set(o.id, "no", e.target.value)}
                             placeholder="Tracking number"
                             className="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors" />
+                          {inputs[o.id]?.courier && (
+                            <input value={inputs[o.id]?.no2 || ""}
+                              onChange={e => set(o.id, "no2", e.target.value)}
+                              placeholder="Tracking number 2 (optional)"
+                              className="w-full mt-2 px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors" />
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <input type="file" accept="image/*"
@@ -1957,7 +2001,7 @@ function TrackingScreen({ orders, onSaveTracking }: { orders: Order[]; onSaveTra
                           onChange={e => set(o.id, "courier", e.target.value)}
                           className="w-full px-2.5 py-2 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 bg-white">
                           <option value="">Select Courier</option>
-                          {["TCS","PostEx","Leopard","M&P","Other"].map(c => <option key={c}>{c}</option>)}
+                          {["TCS","PostEx","Leopard","M&P","Pakistan Post","Other"].map(c => <option key={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
@@ -1966,6 +2010,12 @@ function TrackingScreen({ orders, onSaveTracking }: { orders: Order[]; onSaveTra
                           onChange={e => set(o.id, "no", e.target.value)}
                           placeholder="Enter tracking number"
                           className="w-full px-2.5 py-2 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono bg-white" />
+                        {inputs[o.id]?.courier && (
+                          <input value={inputs[o.id]?.no2 || ""}
+                            onChange={e => set(o.id, "no2", e.target.value)}
+                            placeholder="Tracking number 2 (optional)"
+                            className="w-full mt-2 px-2.5 py-2 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono bg-white" />
+                        )}
                       </div>
                       <div>
                         <label className="text-[11px] font-medium text-slate-500 mb-1 block">Receipt Upload</label>
@@ -1999,6 +2049,7 @@ function TrackingScreen({ orders, onSaveTracking }: { orders: Order[]; onSaveTra
                   <th className="text-left px-6 py-3">Tracking No</th>
                   <th className="text-left px-6 py-3">Status</th>
                   <th className="text-right px-6 py-3 hidden md:table-cell">Amount</th>
+                  <th className="px-6 py-3 w-28"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -2013,6 +2064,14 @@ function TrackingScreen({ orders, onSaveTracking }: { orders: Order[]; onSaveTra
                     <td className="px-6 py-4 font-mono text-sm text-slate-700">{o.trackingNo || "—"}</td>
                     <td className="px-6 py-4"><StatusBadge status={o.status} /></td>
                     <td className="px-6 py-4 font-mono text-sm font-medium text-slate-900 text-right hidden md:table-cell">{formatPKR(o.amount)}</td>
+                    <td className="px-6 py-4 text-right">
+                      {o.status === "shipped" && (
+                        <div className="flex items-center gap-2 justify-end">
+                          <Btn size="sm" variant="secondary" className="px-2 py-1 bg-white hover:bg-emerald-50 border-emerald-200" onClick={() => onUpdateStatus(o.id, "delivered")} title="Mark Delivered"><CheckCircle2 size={14} className="text-emerald-600" /></Btn>
+                          <Btn size="sm" variant="secondary" className="px-2 py-1 bg-white hover:bg-orange-50 border-orange-200" onClick={() => onUpdateStatus(o.id, "returned")} title="Mark Returned"><XCircle size={14} className="text-orange-600" /></Btn>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -2221,6 +2280,7 @@ function SettlementsScreen() {
   const [dragOver, setDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [preview, setPreview] = useState<any[]>([]);
+  const [rawText, setRawText] = useState<string>("");
   const queryClient = useQueryClient();
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | React.DragEvent) => {
@@ -2241,12 +2301,18 @@ function SettlementsScreen() {
       try {
         const result = await Tesseract.recognize(file, 'eng');
         const text = result.data.text;
-        
+        setRawText(text);
         // Extract tracking numbers: length 8 to 25, alphanumeric with hyphens
         const trackingRegex = /\b[A-Z0-9-]{8,25}\b/gi;
-        const matches = text.match(trackingRegex) || [];
-        // Filter out obvious non-tracking stuff like just dates or pure low numbers
-        const potentialTrackings = Array.from(new Set(matches)).filter(t => t.length > 7);
+        const rawMatches = text.match(trackingRegex) || [];
+        
+        // Filter: Must contain at least 4 digits (removes words like SETTLEMENT, DELIVERED)
+        // Clean spaces from matches
+        const cleanedMatches = rawMatches
+          .filter(t => (t.match(/\d/g) || []).length >= 4)
+          .map(t => t.replace(/\s/g, '').toUpperCase());
+          
+        const potentialTrackings = Array.from(new Set(cleanedMatches));
 
         // Send to backend API
         const response = await fetch('/api/settlements/match', {
@@ -2257,7 +2323,15 @@ function SettlementsScreen() {
         
         if (response.ok) {
           const data = await response.json();
-          setPreview(data);
+          // Filter out obvious noise from unmatched items
+          const cleanData = data.filter((row: any) => {
+            if (row.status !== 'unmatched') return true;
+            if (/(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/i.test(row.tracking)) return false; // Dates
+            if (/^\d{11}$/.test(row.tracking)) return false; // Phone / NTN
+            if (/^\d{13}$/.test(row.tracking)) return false; // CNIC
+            return true;
+          });
+          setPreview(cleanData);
         } else {
           alert('Failed to match tracking numbers with server.');
         }
@@ -2355,7 +2429,13 @@ function SettlementsScreen() {
                   <p className="text-sm font-medium animate-pulse text-slate-500">Scanning tracking numbers with AI...</p>
                 </div>
               ) : preview.length === 0 ? (
-                <div className="p-10 text-center text-slate-500 text-sm">No tracking numbers found.</div>
+                <div className="p-10 text-center flex flex-col items-center">
+                  <p className="text-slate-500 text-sm font-medium mb-4">No tracking numbers found.</p>
+                  <div className="w-full text-left bg-slate-50 p-4 rounded-lg border border-slate-200 overflow-auto max-h-64 text-xs font-mono text-slate-600 whitespace-pre-wrap">
+                    <span className="font-bold text-slate-800 block mb-2">Raw OCR Output Debug:</span>
+                    {rawText || "No text extracted at all."}
+                  </div>
+                </div>
               ) : (
                 <table className="w-full text-sm min-w-[500px]">
                   <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
@@ -2388,9 +2468,13 @@ function SettlementsScreen() {
             )}
           </div>
           </div>
-          <div className="flex gap-3">
-            <Btn><Check size={13} /> Approve Settlement</Btn>
-            <Btn variant="danger"><X size={13} /> Reject Settlement</Btn>
+          <div className="flex gap-3 mt-6 pb-8">
+            <Btn size="lg" onClick={() => approveMutation.mutate()} disabled={approveMutation.isPending || matchedCount === 0}>
+              {approveMutation.isPending ? <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Processing...</> : <><Check size={18} /> Approve Settlement</>}
+            </Btn>
+            <Btn size="lg" variant="danger" onClick={() => { setUploaded(false); setPreview([]); }} disabled={approveMutation.isPending}>
+              <X size={18} /> Reject Settlement
+            </Btn>
           </div>
         </>
       )}
@@ -2906,6 +2990,7 @@ export default function App() {
         handledBy: order.handledBy,
         orderType: order.type,
         totalAmount: order.amount,
+        deliveryCharges: order.deliveryCharges || 0,
         advancePayment: order.advancePayment || 0,
         paymentType: order.paymentType || "Courier",
         items: order.products.map((p: any) => ({
@@ -2969,8 +3054,8 @@ export default function App() {
         products: o.items?.map((i: any) => ({ name: i.productName, qty: i.qty, price: i.unitPrice })) || [],
         type: o.orderType,
         notes: o.notes,
-        province: "",
-        deliveryCharges: 0,
+        province: Object.entries(PROVINCE_CITIES).find(([_, cities]) => cities.includes(o.customer?.city || ""))?.[0] || "",
+        deliveryCharges: o.deliveryCharges || 0,
         advancePayment: o.advancePayment || 0,
         paymentType: o.paymentType || "Courier",
         receivedDate: o.codPayments?.[0]?.receivedDate ? new Date(o.codPayments[0].receivedDate).toISOString().split('T')[0] : undefined
@@ -3004,6 +3089,7 @@ export default function App() {
         handledBy: newOrder.handledBy,
         orderType: newOrder.type,
         totalAmount: newOrder.amount,
+        deliveryCharges: newOrder.deliveryCharges || 0,
         advancePayment: newOrder.advancePayment || 0,
         paymentType: newOrder.paymentType || "Courier",
         items: newOrder.products.map((p: any) => ({
@@ -3074,6 +3160,7 @@ export default function App() {
         handledBy: newOrder.handledBy,
         orderType: newOrder.type,
         totalAmount: newOrder.amount,
+        deliveryCharges: newOrder.deliveryCharges || 0,
         advancePayment: newOrder.advancePayment || 0,
         paymentType: newOrder.paymentType || "Courier",
         items: newOrder.products.map((p: any) => ({
@@ -3102,10 +3189,17 @@ export default function App() {
     });
   };
 
-  const handleSaveTracking = (orderId: string, courier: string, trackingNo: string) => {
+  const handleSaveTracking = (orderId: string, courier: string, trackingNo: string, trackingNo2?: string) => {
     updateOrderMut.mutate({
       id: orderId,
-      data: { status: 'shipped', courierName: courier, trackingNumber: trackingNo, actionName: "Tracking Added" }
+      data: { status: 'shipped', courierName: courier, trackingNumber: trackingNo, trackingNumber2: trackingNo2, actionName: "Tracking Added" }
+    });
+  };
+
+  const handleUpdateStatus = (orderId: string, status: OrderStatus) => {
+    updateOrderMut.mutate({
+      id: orderId,
+      data: { status, actionName: `Marked as ${status}` }
     });
   };
 
@@ -3188,7 +3282,7 @@ export default function App() {
             />
           )}
           {screen === "order-detail" && <OrderDetailScreen orderId={selectedOrderId} setScreen={setScreen} orders={orders} />}
-          {screen === "tracking" && <TrackingScreen orders={orders} onSaveTracking={handleSaveTracking} />}
+          {screen === "tracking" && <TrackingScreen orders={orders} onSaveTracking={handleSaveTracking} onUpdateStatus={handleUpdateStatus} />}
           {screen === "cod" && <CODScreen orders={orders} onReceiveCOD={handleReceiveCOD} />}
           {screen === "settlements" && <SettlementsScreen />}
           {screen === "reports" && <ReportsScreen orders={orders} />}

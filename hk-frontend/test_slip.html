@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Courier Settlement Slip</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+        .slip {
+            background-color: white;
+            padding: 30px;
+            max-width: 600px;
+            margin: 0 auto;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            border-bottom: 2px solid #0F172A;
+            padding-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #0F172A;
+            color: white;
+        }
+        .tracking-no {
+            font-family: monospace;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .total {
+            margin-top: 20px;
+            text-align: right;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="slip">
+    <h2>TCS Weekly Settlement Slip</h2>
+    <p><strong>Date:</strong> 2026-07-07</p>
+    <p><strong>Merchant:</strong> HK Fabric</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>S.No</th>
+                <th>Tracking Number</th>
+                <th>Status</th>
+                <th>Amount Collected</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>1</td><td class="tracking-no">TCS10001</td><td>Delivered</td><td>Rs 1,500</td></tr>
+            <tr><td>2</td><td class="tracking-no">TCS10002</td><td>Delivered</td><td>Rs 3,000</td></tr>
+            <tr><td>3</td><td class="tracking-no">TCS10003</td><td>Delivered</td><td>Rs 4,500</td></tr>
+            <tr><td>4</td><td class="tracking-no">TCS10004</td><td>Delivered</td><td>Rs 6,000</td></tr>
+            <tr><td>5</td><td class="tracking-no">TCS10005</td><td>Delivered</td><td>Rs 7,500</td></tr>
+            <tr><td>6</td><td class="tracking-no">TCS10006</td><td>Delivered</td><td>Rs 9,000</td></tr>
+            <tr><td>7</td><td class="tracking-no">TCS10007</td><td>Delivered</td><td>Rs 10,500</td></tr>
+            <tr><td>8</td><td class="tracking-no">TCS10008</td><td>Delivered</td><td>Rs 12,000</td></tr>
+            <tr><td>9</td><td class="tracking-no">TCS10009</td><td>Delivered</td><td>Rs 13,500</td></tr>
+            <tr><td>10</td><td class="tracking-no">TCS100010</td><td>Delivered</td><td>Rs 15,000</td></tr>
+        </tbody>
+    </table>
+
+    <div class="total">
+        Total Settlement Amount: Rs 82,500
+    </div>
+</div>
+
+</body>
+</html>
