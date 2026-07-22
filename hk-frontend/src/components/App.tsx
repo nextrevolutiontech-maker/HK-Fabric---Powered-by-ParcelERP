@@ -2304,13 +2304,13 @@ function SettlementsScreen() {
         setRawText(text);
         // Extract tracking numbers: length 8 to 25, alphanumeric with hyphens
         const trackingRegex = /\b[A-Z0-9-]{8,25}\b/gi;
-        const rawMatches = text.match(trackingRegex) || [];
+        const rawMatches: string[] = text.match(trackingRegex) || [];
         
         // Filter: Must contain at least 4 digits (removes words like SETTLEMENT, DELIVERED)
         // Clean spaces from matches
         const cleanedMatches = rawMatches
-          .filter(t => (t.match(/\d/g) || []).length >= 4)
-          .map(t => t.replace(/\s/g, '').toUpperCase());
+          .filter((t: string) => (t.match(/\d/g) || []).length >= 4)
+          .map((t: string) => t.replace(/\s/g, '').toUpperCase());
           
         const potentialTrackings = Array.from(new Set(cleanedMatches));
 
