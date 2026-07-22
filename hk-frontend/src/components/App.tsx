@@ -176,11 +176,11 @@ function StatusBadge({ status }: { status: OrderStatus | CODStatus }) {
 }
 
 function Btn({
-  children, variant = "primary", size = "md", onClick, className, disabled, type = "button",
+  children, variant = "primary", size = "md", onClick, className, disabled, type = "button", title,
 }: {
   children: ReactNode; variant?: "primary" | "secondary" | "ghost" | "danger";
   size?: "sm" | "md" | "lg"; onClick?: () => void; className?: string;
-  disabled?: boolean; type?: "button" | "submit";
+  disabled?: boolean; type?: "button" | "submit"; title?: string;
 }) {
   const base = "inline-flex items-center justify-center gap-2 font-medium rounded-md transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
   const v = {
@@ -191,7 +191,7 @@ function Btn({
   };
   const s = { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm", lg: "px-6 py-2.5 text-sm" };
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={cn(base, v[variant], s[size], className)}>
+    <button type={type} onClick={onClick} disabled={disabled} title={title} className={cn(base, v[variant], s[size], className)}>
       {children}
     </button>
   );
