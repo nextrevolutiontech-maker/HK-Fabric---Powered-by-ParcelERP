@@ -1991,7 +1991,7 @@ function CreateOrderScreen({
   const [orderType, setOrderType] = useState<"COD" | "NON-COD">("COD");
   const [deliveryCharges, setDeliveryCharges] = useState<number>(0);
   const [advancePayment, setAdvancePayment] = useState<number>(0);
-  const [paymentType, setPaymentType] = useState<"Online" | "Courier">("Courier");
+  const [paymentType, setPaymentType] = useState<"Online" | "Courier">("Online");
   const [notes, setNotes] = useState("");
   const [products, setProducts] = useState([{ name: "", qty: 1, price: 0 }]);
   const [saved, setSaved] = useState(false);
@@ -2435,28 +2435,17 @@ function CreateOrderScreen({
                 </p>
               </div>
 
-              {/* Payment Channel Toggle Box */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Advance Received Via</label>
-                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
-                  {(["Online", "Courier"] as const).map(t => (
-                    <button 
-                      key={t} 
-                      type="button" 
-                      onClick={() => setPaymentType(t)}
-                      className={cn(
-                        "py-2 text-xs font-bold rounded-lg transition-all",
-                        paymentType === t 
-                          ? "bg-[#0F172A] text-white shadow-sm" 
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-300/60"
-                      )}
-                    >
-                      {t}
-                    </button>
-                  ))}
+              {/* Advance Payment Method Badge */}
+              <div className="p-4 rounded-xl border border-emerald-200/80 bg-emerald-50/40 space-y-2">
+                <label className="text-xs font-bold text-emerald-900 uppercase tracking-wider block">Advance Payment Method</label>
+                <div className="p-2.5 bg-white rounded-xl border border-emerald-200 shadow-xs flex items-center justify-between font-bold text-xs text-emerald-950">
+                  <span className="flex items-center gap-2">
+                    <Banknote size={16} className="text-emerald-600" /> Online Transfer (Bank / EasyPaisa / JazzCash)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-mono text-[10px] uppercase">Online</span>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Select payment method used by customer for advance payments.
+                <p className="text-[11px] text-emerald-700/80 mt-1">
+                  Advance payments before dispatch are received online. Courier collects remaining balance on COD.
                 </p>
               </div>
 
@@ -2646,8 +2635,8 @@ function CreateOrderScreen({
                   <span className={cn("font-bold", orderType === "COD" ? "text-emerald-700" : "text-indigo-700")}>{orderType}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400 font-sans">Channel:</span>
-                  <span className="font-bold text-slate-800">{paymentType}</span>
+                  <span className="text-slate-400 font-sans">Advance:</span>
+                  <span className="font-bold text-emerald-700">Online Transfer</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400 font-sans">Agent:</span>
