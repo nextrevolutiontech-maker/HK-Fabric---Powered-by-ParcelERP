@@ -1,5 +1,5 @@
 "use client";
-import { memo, useState, useEffect, useRef } from "react";
+import { memo, useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import type { ReactNode, InputHTMLAttributes, SelectHTMLAttributes, ElementType } from "react";
 import {
@@ -7,7 +7,8 @@ import {
   BarChart2, ClipboardList, Settings, Search, Bell, Menu, X,
   Eye, Edit2, Printer, Ban, CheckCircle2, Clock, AlertTriangle,
   TrendingUp, Upload, Download, User, Save, ArrowLeft, Check,
-  AlertCircle, ChevronRight, Layers, XCircle, Calendar, LogOut
+  AlertCircle, ChevronRight, Layers, XCircle, Calendar, LogOut,
+  Box, DollarSign, BarChart3, Activity
 } from "lucide-react";
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -682,6 +683,15 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
     }
   });
 
+  const { data: activityLogs = [] } = useQuery<any[]>({
+    queryKey: ['activities'],
+    queryFn: async () => {
+      const res = await fetch('/api/activities');
+      if (!res.ok) return [];
+      return (await safeResponseJson(res)) || [];
+    }
+  });
+
   const codCount = stats?.cod?.count ?? orders.filter(o => o.type === "COD" && o.status !== "void").length;
   const codSales = stats?.cod?.sales ?? orders.filter(o => o.type === "COD" && o.status !== "void").reduce((a, b) => a + b.amount, 0);
   const pendingCOD = stats?.cod?.pendingAmount ?? orders.filter(o => o.type === "COD" && o.codStatus === "pending" && o.status !== "void").reduce((a, b) => a + b.amount, 0);
@@ -694,148 +704,452 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
   const totalSales = stats?.overall?.totalSales ?? (codSales + nonCodSales);
 
   const pendingTracking = orders.filter(o => !o.trackingNo && o.status !== "void").length;
+  const pendingCODOrdersCount = orders.filter(o => o.type === "COD" && o.codStatus === "pending" && o.status !== "void").length;
+
+  const chartData = useMemo(() => {
+    const map: Record<string, { date: string; cod: number; nonCod: number; total: number }> = {};
+    orders.forEach(o => {
+      if (o.status === "void") return;
+      const dateKey = o.date || "Today";
+      if (!map[dateKey]) map[dateKey] = { date: dateKey, cod: 0, nonCod: 0, total: 0 };
+      if (o.type === "COD") map[dateKey].cod += 1;
+      else map[dateKey].nonCod += 1;
+      map[dateKey].total += 1;
+    });
+    return Object.values(map).slice(-7);
+  }, [orders]);
+
+  const greetingTime = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  }, []);
+
+  const todayFormatted = useMemo(() => {
+    return new Date().toLocaleDateString("en-PK", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    });
+  }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+    <div className="space-y-6 pb-10">
+      {/* ─── 1. Header & Greeting Banner ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-xl font-bold text-[#0F172A]">System Dashboard</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Authoritative metrics & live parcel statistics</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] tracking-tight">{greetingTime}, Admin</h1>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 font-mono">
+              Live Operations
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">Here's what's happening with your courier business today.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Btn size="sm" onClick={() => setScreen("cod-parcels")} variant="secondary">
-            <Banknote size={14} className="text-emerald-600" /> COD Parcels ({codCount})
-          </Btn>
-          <Btn size="sm" onClick={() => setScreen("non-cod-parcels")} variant="secondary">
-            <Package size={14} className="text-indigo-600" /> Non-COD Parcels ({nonCodCount})
-          </Btn>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-mono text-slate-600">
+            <Calendar size={14} className="text-slate-400" />
+            <span>{todayFormatted}</span>
+          </div>
+          <button 
+            onClick={() => setScreen("create-order")}
+            className="px-4 py-2 bg-[#0F172A] hover:bg-[#1E293B] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 active:scale-95"
+          >
+            <Plus size={15} /> New Parcel
+          </button>
         </div>
       </div>
 
-      {/* Overall Total Metrics Banner */}
-      <div className="bg-[#0F172A] text-white rounded-xl p-5 shadow-sm border border-slate-800">
-        <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Overall System Totals</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono">
-          <div>
-            <span className="text-xs text-slate-400 block">Total Parcels</span>
-            <span className="text-2xl font-bold text-white">{totalCount}</span>
+      {/* ─── 2. Operational Attention & Quick Actions Bar ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        {/* Actionable Alerts (8 Cols) */}
+        <div className="md:col-span-8 flex flex-col sm:flex-row gap-3">
+          <div 
+            onClick={() => setScreen("tracking")}
+            className={cn(
+              "flex-1 p-3.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 group",
+              pendingTracking > 0
+                ? "bg-amber-50/70 border-amber-200/80 hover:bg-amber-100/80"
+                : "bg-emerald-50/50 border-emerald-100 hover:bg-emerald-100/50"
+            )}
+          >
+            <div className={cn(
+              "p-2.5 rounded-lg flex-shrink-0",
+              pendingTracking > 0 ? "bg-amber-500/10 text-amber-700" : "bg-emerald-500/10 text-emerald-700"
+            )}>
+              <Truck size={18} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800">Awaiting Courier Tracking</span>
+                <ChevronRight size={14} className="text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+              <div className="text-xs text-slate-500 font-mono mt-0.5">
+                {pendingTracking > 0 ? (
+                  <span className="font-bold text-amber-800">{pendingTracking} parcels require tracking numbers</span>
+                ) : (
+                  <span className="text-emerald-700">All active parcels have tracking numbers</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div 
+            onClick={() => setScreen("cod-parcels")}
+            className={cn(
+              "flex-1 p-3.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 group",
+              pendingCODOrdersCount > 0
+                ? "bg-indigo-50/70 border-indigo-200/80 hover:bg-indigo-100/80"
+                : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+            )}
+          >
+            <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-700 flex-shrink-0">
+              <Banknote size={18} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800">Pending COD Collection</span>
+                <ChevronRight size={14} className="text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+              <div className="text-xs text-slate-500 font-mono mt-0.5">
+                <span className="font-bold text-indigo-900">{formatPKR(pendingCOD)}</span>
+                <span className="text-slate-500 ml-1">({pendingCODOrdersCount} parcels)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Compact Quick Actions Pill Container (4 Cols) */}
+        <div className="md:col-span-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-around gap-1">
+          <button onClick={() => setScreen("cod-parcels")} title="COD Parcels" className="p-2 hover:bg-slate-100 text-slate-700 rounded-lg text-center font-medium transition-colors flex flex-col items-center gap-1">
+            <Banknote size={16} className="text-emerald-600" />
+            <span className="text-[10px] font-bold">COD</span>
+          </button>
+          <button onClick={() => setScreen("non-cod-parcels")} title="Non-COD Parcels" className="p-2 hover:bg-slate-100 text-slate-700 rounded-lg text-center font-medium transition-colors flex flex-col items-center gap-1">
+            <Package size={16} className="text-indigo-600" />
+            <span className="text-[10px] font-bold">Non-COD</span>
+          </button>
+          <button onClick={() => setScreen("tracking")} title="Add Tracking" className="p-2 hover:bg-slate-100 text-slate-700 rounded-lg text-center font-medium transition-colors flex flex-col items-center gap-1">
+            <Truck size={16} className="text-amber-600" />
+            <span className="text-[10px] font-bold">Tracking</span>
+          </button>
+          <button onClick={() => setScreen("settlements")} title="Settlements" className="p-2 hover:bg-slate-100 text-slate-700 rounded-lg text-center font-medium transition-colors flex flex-col items-center gap-1">
+            <Receipt size={16} className="text-purple-600" />
+            <span className="text-[10px] font-bold">Settlement</span>
+          </button>
+          <button onClick={() => setScreen("daily-closing")} title="Daily Closing" className="p-2 hover:bg-slate-100 text-slate-700 rounded-lg text-center font-medium transition-colors flex flex-col items-center gap-1">
+            <Clock size={16} className="text-slate-600" />
+            <span className="text-[10px] font-bold">Closing</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ─── 3. Primary KPI Row (4 Key Financial & Operational Metric Cards) ─── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Sales Revenue - Financial Highlight */}
+        <div className="bg-[#0F172A] text-white p-5 rounded-2xl border border-slate-800 shadow-md flex flex-col justify-between relative overflow-hidden group">
+          <div className="absolute -right-3 -bottom-3 text-slate-800/40 opacity-30 group-hover:scale-110 transition-transform">
+            <DollarSign size={90} />
           </div>
           <div>
-            <span className="text-xs text-slate-400 block">Total Sales Revenue</span>
-            <span className="text-2xl font-bold text-[#D4AF37]">{formatPKR(totalSales)}</span>
+            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold uppercase tracking-wider">
+              <span>Total Sales Revenue</span>
+              <span className="p-1.5 rounded-lg bg-amber-500/10 text-[#D4AF37]">
+                <TrendingUp size={14} />
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-[#D4AF37] mt-3">
+              {formatPKR(totalSales)}
+            </div>
+          </div>
+          <div className="text-[11px] text-slate-400 font-mono mt-3 border-t border-slate-800/80 pt-2">
+            Grand total across all parcels
+          </div>
+        </div>
+
+        {/* Total Parcels Volume */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between group hover:border-slate-300 transition-colors">
+          <div>
+            <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
+              <span>Total Parcels</span>
+              <span className="p-1.5 rounded-lg bg-slate-100 text-slate-700">
+                <Box size={14} />
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-[#0F172A] mt-3">
+              {totalCount.toLocaleString()}
+            </div>
+          </div>
+          <div className="text-[11px] text-slate-500 font-mono mt-3 border-t border-slate-100 pt-2 flex items-center justify-between">
+            <span>{codCount} COD</span>
+            <span className="text-slate-300">•</span>
+            <span>{nonCodCount} Non-COD</span>
+          </div>
+        </div>
+
+        {/* Pending COD Cash */}
+        <div className="bg-white p-5 rounded-2xl border border-amber-200/80 shadow-sm flex flex-col justify-between bg-gradient-to-b from-amber-50/20 to-white group hover:border-amber-300 transition-colors">
+          <div>
+            <div className="flex items-center justify-between text-amber-700 text-xs font-bold uppercase tracking-wider">
+              <span>Pending COD</span>
+              <span className="p-1.5 rounded-lg bg-amber-100 text-amber-800">
+                <Clock size={14} />
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-amber-700 mt-3">
+              {formatPKR(pendingCOD)}
+            </div>
+          </div>
+          <div className="text-[11px] text-amber-800 font-mono mt-3 border-t border-amber-100 pt-2">
+            Cash to be collected by couriers
+          </div>
+        </div>
+
+        {/* Received COD Cash */}
+        <div className="bg-white p-5 rounded-2xl border border-emerald-200/80 shadow-sm flex flex-col justify-between bg-gradient-to-b from-emerald-50/20 to-white group hover:border-emerald-300 transition-colors">
+          <div>
+            <div className="flex items-center justify-between text-emerald-700 text-xs font-bold uppercase tracking-wider">
+              <span>Received COD</span>
+              <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
+                <CheckCircle2 size={14} />
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-700 mt-3">
+              {formatPKR(receivedCOD)}
+            </div>
+          </div>
+          <div className="text-[11px] text-emerald-800 font-mono mt-3 border-t border-emerald-100 pt-2">
+            Bank accounts reconciled
           </div>
         </div>
       </div>
 
-      {/* Separated COD vs Non-COD Operational Sections */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* COD Block */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h2 className="font-bold text-slate-900 flex items-center gap-2 text-sm">
-              <Banknote size={18} className="text-emerald-600" /> COD Parcels & Sales
-            </h2>
-            <button onClick={() => setScreen("cod-parcels")} className="text-xs font-semibold text-emerald-700 hover:underline">
-              Open COD Section →
+      {/* ─── 4. Split Financial Breakdown + Analytics Chart Grid ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* COD & Non-COD Detailed Cards (5 Cols) */}
+        <div className="lg:col-span-5 space-y-4 flex flex-col justify-between">
+          {/* COD Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+                  <Banknote size={16} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide">COD Operations</h3>
+                  <span className="text-[10px] text-slate-400">Cash collection on delivery</span>
+                </div>
+              </div>
+              <button onClick={() => setScreen("cod-parcels")} className="text-[11px] font-bold text-emerald-700 hover:underline">
+                Manage COD →
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 font-mono">
+              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] text-slate-400 font-sans block">COD Parcels</span>
+                <span className="text-lg font-extrabold text-slate-900">{codCount}</span>
+              </div>
+              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] text-slate-400 font-sans block">COD Sales</span>
+                <span className="text-lg font-extrabold text-emerald-700">{formatPKR(codSales)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Non-COD Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                  <Package size={16} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide">Non-COD Operations</h3>
+                  <span className="text-[10px] text-slate-400">Prepaid & Direct payment</span>
+                </div>
+              </div>
+              <button onClick={() => setScreen("non-cod-parcels")} className="text-[11px] font-bold text-indigo-700 hover:underline">
+                Manage Non-COD →
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 font-mono">
+              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] text-slate-400 font-sans block">Non-COD Parcels</span>
+                <span className="text-lg font-extrabold text-slate-900">{nonCodCount}</span>
+              </div>
+              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] text-slate-400 font-sans block">Non-COD Sales</span>
+                <span className="text-lg font-extrabold text-indigo-700">{formatPKR(nonCodSales)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Analytics Chart Panel (7 Cols) */}
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col justify-between min-h-[260px]">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-2">
+            <div>
+              <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide flex items-center gap-2">
+                <BarChart3 size={15} className="text-slate-500" /> Daily Parcel Trends
+              </h3>
+              <span className="text-[11px] text-slate-400">Volume breakdown by date (COD vs Non-COD)</span>
+            </div>
+            <div className="flex items-center gap-3 text-xs font-mono">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="text-slate-600 text-[11px]">COD</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                <span className="text-slate-600 text-[11px]">Non-COD</span>
+              </div>
+            </div>
+          </div>
+
+          {chartData.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
+              <BarChart3 size={32} className="text-slate-300 mb-2" />
+              <span className="text-xs font-medium text-slate-500">No parcel activity recorded yet</span>
+              <span className="text-[11px] text-slate-400 mt-0.5">Create your first parcel to view daily trends</span>
+            </div>
+          ) : (
+            <div className="h-44 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0F172A', color: '#fff', borderRadius: '8px', fontSize: '11px', border: 'none' }}
+                    itemStyle={{ color: '#fff' }}
+                  />
+                  <Bar dataKey="cod" name="COD Parcels" fill="#10B981" radius={[4, 4, 0, 0]} stackId="a" />
+                  <Bar dataKey="nonCod" name="Non-COD Parcels" fill="#6366F1" radius={[4, 4, 0, 0]} stackId="a" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ─── 5. Recent Parcels Table & Recent Activity Log Grid ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Recent Parcels Table (8 Cols) */}
+        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-bold text-[#0F172A] uppercase tracking-wide">Recent Parcels</h2>
+              <span className="text-[10px] font-mono font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">
+                {orders.length} Total
+              </span>
+            </div>
+            <button onClick={() => setScreen("orders")} className="text-xs text-slate-500 hover:text-[#0F172A] font-semibold transition-colors flex items-center gap-1">
+              View all <ChevronRight size={13} />
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3 font-mono">
-            <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
-              <span className="text-[11px] text-slate-500 font-sans block">COD Parcels</span>
-              <span className="text-xl font-bold text-slate-900">{codCount}</span>
+
+          {orders.length === 0 ? (
+            <div className="p-12 text-center flex flex-col items-center justify-center space-y-3">
+              <div className="p-3 bg-slate-100 rounded-full text-slate-400">
+                <Box size={28} />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">No parcels yet</h4>
+                <p className="text-xs text-slate-500 mt-0.5">Create your first parcel to get started with tracking.</p>
+              </div>
+              <button 
+                onClick={() => setScreen("create-order")}
+                className="px-4 py-2 bg-[#0F172A] hover:bg-[#1E293B] text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5"
+              >
+                <Plus size={14} /> Create Parcel
+              </button>
             </div>
-            <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
-              <span className="text-[11px] text-slate-500 font-sans block">COD Total Sales</span>
-              <span className="text-xl font-bold text-emerald-700">{formatPKR(codSales)}</span>
+          ) : (
+            <div className="overflow-x-auto scrollbar-hide">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 font-mono uppercase text-[10px]">
+                  <tr>
+                    <th className="px-4 py-2.5 font-bold">Order ID</th>
+                    <th className="px-4 py-2.5 font-bold">Customer</th>
+                    <th className="px-4 py-2.5 font-bold">Type</th>
+                    <th className="px-4 py-2.5 font-bold text-right">Amount</th>
+                    <th className="px-4 py-2.5 font-bold">Agent</th>
+                    <th className="px-4 py-2.5 font-bold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-sans">
+                  {orders.slice(0, 6).map(o => (
+                    <tr key={o.id} onClick={() => onViewOrder(o.id)} className="hover:bg-slate-50/80 transition-colors cursor-pointer group">
+                      <td className="px-4 py-3 font-mono font-bold text-slate-900 group-hover:text-blue-600">{o.id}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-slate-900">{o.customer}</div>
+                        <div className="text-[10px] text-slate-400">{o.city}</div>
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded font-extrabold text-[10px]",
+                          o.type === "COD" ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60" : "bg-indigo-50 text-indigo-700 border border-indigo-200/60"
+                        )}>
+                          {o.type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">{formatPKR(o.amount)}</td>
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded text-[10px] font-bold",
+                          o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700" : "bg-purple-50 text-purple-700"
+                        )}>
+                          {o.handledBy}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100">
-              <span className="text-[11px] text-slate-500 font-sans block">Pending COD</span>
-              <span className="text-base font-bold text-amber-700">{formatPKR(pendingCOD)}</span>
-            </div>
-            <div className="p-3 bg-teal-50/50 rounded-lg border border-teal-100">
-              <span className="text-[11px] text-slate-500 font-sans block">Received COD</span>
-              <span className="text-base font-bold text-teal-700">{formatPKR(receivedCOD)}</span>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Non-COD Block */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h2 className="font-bold text-slate-900 flex items-center gap-2 text-sm">
-              <Package size={18} className="text-indigo-600" /> Non-COD Parcels & Sales
-            </h2>
-            <button onClick={() => setScreen("non-cod-parcels")} className="text-xs font-semibold text-indigo-700 hover:underline">
-              Open Non-COD Section →
+        {/* Recent Activity Audit Trail (4 Cols) */}
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide flex items-center gap-1.5">
+              <Activity size={15} className="text-slate-500" /> Recent Activity
+            </h3>
+            <button onClick={() => setScreen("activity-log")} className="text-[10px] font-bold text-slate-500 hover:text-slate-800">
+              Log →
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3 font-mono">
-            <div className="p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
-              <span className="text-[11px] text-slate-500 font-sans block">Non-COD Parcels</span>
-              <span className="text-xl font-bold text-slate-900">{nonCodCount}</span>
-            </div>
-            <div className="p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
-              <span className="text-[11px] text-slate-500 font-sans block">Non-COD Total Sales</span>
-              <span className="text-xl font-bold text-indigo-700">{formatPKR(nonCodSales)}</span>
-            </div>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-500 font-sans">
-            Prepaid orders via Online transfer or direct courier payment.
-          </div>
-        </div>
-      </div>
 
-      {/* Quick Actions & Recent Orders */}
-      <div className="flex flex-wrap gap-2">
-        <Btn onClick={() => setScreen("create-order")}><Plus size={14} /> New Parcel</Btn>
-        <Btn variant="secondary" onClick={() => setScreen("cod-parcels")}><Banknote size={14} /> COD Section</Btn>
-        <Btn variant="secondary" onClick={() => setScreen("non-cod-parcels")}><Package size={14} /> Non-COD Section</Btn>
-        <Btn variant="secondary" onClick={() => setScreen("tracking")}><Truck size={14} /> Add Tracking</Btn>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
-          <h2 className="text-sm font-semibold text-[#0F172A]">Recent Parcels</h2>
-          <button onClick={() => setScreen("orders")} className="text-sm text-slate-500 hover:text-[#0F172A] font-medium transition-colors">View all →</button>
-        </div>
-        <div className="overflow-x-auto flex-1 scrollbar-hide">
-          <table className="w-full text-sm min-w-[600px]">
-            <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
-              <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                <th className="text-left px-6 py-3 whitespace-nowrap">Order ID</th>
-                <th className="text-left px-6 py-3">Customer</th>
-                <th className="text-left px-6 py-3">Type</th>
-                <th className="text-right px-6 py-3">Amount</th>
-                <th className="text-left px-6 py-3">Agent</th>
-                <th className="text-left px-6 py-3">Status</th>
-                <th className="text-left px-6 py-3">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {orders.slice(0, 6).map(o => (
-                <tr key={o.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => onViewOrder(o.id)}>
-                  <td className="px-6 py-4 font-mono text-xs font-medium text-slate-900 group-hover:text-[#0F172A]">{o.id}</td>
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-sm text-slate-900">{o.customer}</div>
-                    <div className="text-xs text-slate-500">{o.city}</div>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-xs">
-                    <span className={cn("px-2 py-0.5 rounded font-bold text-[10px]", o.type === "COD" ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-700")}>
-                      {o.type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(o.amount)}</td>
-                  <td className="px-6 py-4">
-                    <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-medium tracking-wide",
-                      o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
-                    )}>{o.handledBy}</span>
-                  </td>
-                  <td className="px-6 py-4"><StatusBadge status={o.status} /></td>
-                  <td className="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{o.date}</td>
-                </tr>
+          {activityLogs.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-400">
+              <Activity size={24} className="text-slate-300 mb-1.5" />
+              <span className="text-xs font-medium text-slate-500">No recent activity</span>
+              <span className="text-[10px] text-slate-400 mt-0.5">Staff audit actions will appear here</span>
+            </div>
+          ) : (
+            <div className="space-y-3 font-sans overflow-y-auto max-h-[260px] pr-1 scrollbar-hide">
+              {activityLogs.slice(0, 5).map((log: any, idx: number) => (
+                <div key={log.id || idx} className="flex items-start gap-2.5 text-xs">
+                  <div className="p-1.5 rounded-full bg-slate-100 text-slate-600 mt-0.5 flex-shrink-0">
+                    <User size={12} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 truncate">{log.action || "Activity"}</span>
+                      <span className="text-[9px] text-slate-400 font-mono">
+                        {log.createdAt ? new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">{log.details || log.performedBy || "Staff Action"}</p>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          )}
         </div>
       </div>
     </div>
