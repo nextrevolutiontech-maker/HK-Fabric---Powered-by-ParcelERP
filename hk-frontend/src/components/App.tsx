@@ -4902,8 +4902,11 @@ function LoginScreen({ onLoginSuccess }: { onLoginSuccess: (user: any) => void }
           </button>
         </form>
 
-        <div className="text-center border-t border-slate-100 pt-4 text-[11px] text-slate-400">
-          Single-User Secure Authentication • Powered by ParcelERP
+        <div className="text-center border-t border-slate-100 pt-4 text-[11px] text-slate-400 space-y-1">
+          <div>Single-User Secure Authentication • Powered by ParcelERP</div>
+          <div className="text-[10px] text-slate-400 pt-1 font-sans">
+            Developed by <span className="font-bold text-slate-800">Next Revolution Tech</span> | Lead Architect: <span className="font-bold text-[#0F172A]">Muhammad Ahsan Khan</span>
+          </div>
         </div>
       </div>
     </div>
@@ -5510,6 +5513,30 @@ export default function App() {
           {screen === "activity-log" && <ActivityLogScreen activityLogs={activityLogs} />}
           {screen === "settings" && <SettingsScreen />}
         </main>
+
+        {/* Sleek Enterprise Developer Footer Signature */}
+        <footer className="mt-auto py-3.5 px-6 border-t border-slate-200/80 bg-white/90 backdrop-blur-sm print:hidden">
+          <div className="max-w-[1600px] w-full mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 font-sans">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 bg-[#0F172A] rounded-md flex items-center justify-center font-extrabold text-[10px] text-[#D4AF37] shadow-xs">
+                NR
+              </div>
+              <span className="font-semibold text-slate-700">
+                Developed by <span className="font-extrabold text-[#0F172A]">Next Revolution Tech</span>
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2 text-[11px] flex-wrap justify-center">
+              <span className="text-slate-500 font-medium">
+                Lead Architect: <strong className="text-slate-900 font-extrabold">Muhammad Ahsan Khan</strong>
+              </span>
+              <span className="hidden sm:inline text-slate-300">•</span>
+              <span className="font-mono text-[10px] text-slate-600 font-bold bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
+                v2026.1.0 Production
+              </span>
+            </div>
+          </div>
+        </footer>
       </div>
 
       <GlobalSearch
