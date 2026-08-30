@@ -2064,10 +2064,10 @@ function CreateOrderScreen({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-5 max-w-5xl pb-8 relative" onKeyDown={handleKeyDown}>
+    <div className="max-w-7xl w-full mx-auto pb-12 relative" onKeyDown={handleKeyDown}>
       {/* Floating Auto-dismissing Toast Notification */}
       {toastMsg && (
-        <div className="fixed top-20 right-6 z-50 bg-[#0F172A] text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-3 text-xs font-semibold animate-bounce">
+        <div className="fixed top-20 right-6 z-50 bg-[#0F172A] text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 text-xs font-semibold animate-bounce">
           <AlertCircle size={18} className="text-[#D4AF37] flex-shrink-0" />
           <span>{toastMsg}</span>
           <button onClick={() => setToastMsg(null)} className="ml-2 text-slate-400 hover:text-white">
@@ -2076,152 +2076,361 @@ function CreateOrderScreen({
         </div>
       )}
 
-      {/* Left Column: Form */}
-      <div className="flex-1 space-y-4">
-        {/* Header & Agent */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setScreen("orders")} className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors bg-slate-100">
-              <ArrowLeft size={16} className="text-slate-600" />
-            </button>
-            <div>
-              <h1 className="text-lg font-bold text-[#0F172A] leading-tight">{editOrderId ? "Edit Order" : "New Order"}</h1>
-              <p className="text-[11px] text-slate-400 font-mono mt-0.5">{orderIdToSave}</p>
+      {/* Top Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-6">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setScreen("orders")} 
+            className="p-2 rounded-xl hover:bg-slate-200 transition-colors bg-slate-100 text-slate-700"
+            title="Back to Orders"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] tracking-tight">
+                {editOrderId ? "Edit Parcel Details" : "Create New Parcel"}
+              </h1>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 font-mono">
+                {orderIdToSave}
+              </span>
             </div>
-          </div>
-          
-          <div className="flex bg-slate-100 p-1 rounded-lg shadow-inner">
-            {(["Sami", "Abid"] as const).map(name => (
-              <button key={name} onClick={() => setHandledBy(name)}
-                className={cn(
-                  "px-4 py-1.5 rounded-md text-xs font-bold transition-all",
-                  handledBy === name
-                    ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-black/5"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                )}>
-                {name}
-              </button>
-            ))}
+            <p className="text-xs text-slate-500 mt-0.5">Enter customer details, payment setup, and item breakdown.</p>
           </div>
         </div>
+        
+        {/* Agent Toggle Pills */}
+        <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200/80">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2">Handled By:</span>
+          {(["Sami", "Abid"] as const).map(name => (
+            <button 
+              key={name} 
+              type="button"
+              onClick={() => setHandledBy(name)}
+              className={cn(
+                "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
+                handledBy === name
+                  ? "bg-[#0F172A] text-white shadow-sm"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+              )}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {errorMsg && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 font-medium shadow-sm flex items-center gap-2">
-            <AlertCircle size={16} /> {errorMsg}
-          </div>
-        )}
+      {errorMsg && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700 font-semibold shadow-sm flex items-center gap-3">
+          <AlertCircle size={18} className="text-red-600 flex-shrink-0" /> 
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
-        {/* Unified Customer Card */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden focus-within:border-slate-300 transition-colors">
-          <div className="px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 font-semibold text-[#0F172A] text-sm flex items-center gap-2">
-            <User size={14} className="text-slate-400" /> Customer Details
+      {/* Main 2-Column Responsive Layout (72% Left Form / 28% Right Summary) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Form Fields (8.5 / 12 Cols = ~71%) */}
+        <div className="lg:col-span-8 space-y-6">
+
+          {/* ─── SECTION 01 — CUSTOMER DETAILS ─── */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-[#0F172A] text-white text-xs font-bold font-mono">
+                  01
+                </span>
+                <h2 className="font-extrabold text-[#0F172A] text-base tracking-tight flex items-center gap-2">
+                  <User size={18} className="text-slate-500" /> Customer Details
+                </h2>
+              </div>
+              <span className="text-xs text-slate-400 font-mono">* Required fields</span>
+            </div>
+
+            {existing && (
+              <div className="p-3.5 bg-emerald-50/80 border border-emerald-200/80 rounded-xl flex items-start gap-3 shadow-sm">
+                <CheckCircle2 size={18} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-emerald-900">Existing Returning Customer Found!</div>
+                  <div className="text-xs text-emerald-700 mt-0.5 flex flex-wrap gap-x-2 gap-y-1">
+                    <span className="font-semibold">{existing.customer}</span>
+                    <span>•</span>
+                    <span>{orders.filter(o => o.whatsapp === whatsapp).length} total orders</span>
+                    <span>•</span>
+                    <span className="font-bold">Total Spent: {formatPKR(orders.filter(o => o.whatsapp === whatsapp).reduce((a, b) => a + b.amount, 0))}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Grid Layout: Row 1 (WhatsApp, Name, City) */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+              <div className="sm:col-span-4">
+                <FieldInput 
+                  label="WhatsApp / Phone Number" 
+                  autoFocus 
+                  value={whatsapp} 
+                  onChange={e => setWhatsapp(e.target.value)} 
+                  placeholder="03001234567" 
+                  maxLength={11} 
+                  required 
+                  className="font-mono text-sm py-2 px-3 rounded-xl" 
+                />
+              </div>
+              <div className="sm:col-span-4">
+                <FieldInput 
+                  label="Customer Full Name" 
+                  value={customerName} 
+                  onChange={e => setCustomerName(e.target.value)} 
+                  placeholder="e.g. Muhammad Ali" 
+                  required 
+                  className="text-sm py-2 px-3 rounded-xl" 
+                />
+              </div>
+              <div className="sm:col-span-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    City <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    list="pakistan-cities"
+                    value={city}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setCity(val);
+                      const foundProv = Object.entries(PROVINCE_CITIES).find(([_, cities]) => cities.some(c => c.toLowerCase() === val.toLowerCase()));
+                      if (foundProv) setProvince(foundProv[0]);
+                    }}
+                    placeholder="Search or select city"
+                    required
+                    className="block w-full rounded-xl border border-slate-200 py-2 px-3 text-slate-900 shadow-sm placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] focus:border-transparent text-sm transition-all bg-white font-medium"
+                  />
+                  <datalist id="pakistan-cities">
+                    {(province ? PROVINCE_CITIES[province] : Object.values(PROVINCE_CITIES).flat().sort()).map(c => <option key={c} value={c} />)}
+                  </datalist>
+                </div>
+              </div>
+
+              {/* Row 2: Complete Address (Full Width) */}
+              <div className="sm:col-span-12">
+                <FieldInput 
+                  label="Complete Delivery Address" 
+                  value={address} 
+                  onChange={e => setAddress(e.target.value)} 
+                  placeholder="House / Flat No., Street, Sector, Landmark, Area..." 
+                  required 
+                  className="text-sm py-2.5 px-3 rounded-xl" 
+                />
+              </div>
+
+              {/* Row 3: Province & Alternate Phone */}
+              <div className="sm:col-span-6">
+                <FieldSelect 
+                  label="Province / Region (Optional)" 
+                  value={province} 
+                  onChange={e => setProvince(e.target.value)} 
+                  className="text-sm py-2 px-3 rounded-xl"
+                >
+                  <option value="">Select Province</option>
+                  {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                </FieldSelect>
+              </div>
+              <div className="sm:col-span-6">
+                <FieldInput 
+                  label="Alternate Phone Number (Optional)" 
+                  value={altPhone} 
+                  onChange={e => setAltPhone(e.target.value)} 
+                  placeholder="03xxxxxxxxx" 
+                  className="font-mono text-sm py-2 px-3 rounded-xl" 
+                />
+              </div>
+            </div>
           </div>
-          
-          {existing && (
-            <div className="mx-4 mt-4 p-3 bg-emerald-50 border border-emerald-100 rounded-lg flex items-start gap-2.5 shadow-sm">
-              <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-              <div className="min-w-0">
-                <div className="text-[13px] font-bold text-emerald-800">Existing Customer</div>
-                <div className="text-[11px] text-emerald-700 mt-0.5 flex flex-wrap gap-x-2 gap-y-1">
-                  <span className="font-medium">{existing.customer}</span>
-                  <span>•</span>
-                  <span>{orders.filter(o => o.whatsapp === whatsapp).length} orders</span>
-                  <span>•</span>
-                  <span className="font-semibold">Spent: {formatPKR(orders.filter(o => o.whatsapp === whatsapp).reduce((a, b) => a + b.amount, 0))}</span>
+
+          {/* ─── SECTION 02 — PARCEL & PAYMENT CONFIGURATION ─── */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-[#0F172A] text-white text-xs font-bold font-mono">
+                  02
+                </span>
+                <h2 className="font-extrabold text-[#0F172A] text-base tracking-tight flex items-center gap-2">
+                  <Banknote size={18} className="text-slate-500" /> Parcel & Payment Setup
+                </h2>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Order Type Toggle Box */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Order Type</label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
+                  {(["COD", "NON-COD"] as const).map(t => (
+                    <button 
+                      key={t} 
+                      type="button" 
+                      onClick={() => handleOrderTypeChange(t)}
+                      className={cn(
+                        "py-2 text-xs font-bold rounded-lg transition-all",
+                        orderType === t 
+                          ? (t === "COD" ? "bg-emerald-600 text-white shadow-sm" : "bg-indigo-600 text-white shadow-sm")
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-300/60"
+                      )}
+                    >
+                      {t === "COD" ? "Cash on Delivery" : "Non-COD (Prepaid)"}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {orderType === "COD" ? "Courier will collect remaining balance upon parcel delivery." : "Order is 100% advance paid online or via bank transfer."}
+                </p>
+              </div>
+
+              {/* Payment Channel Toggle Box */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Advance Received Via</label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
+                  {(["Online", "Courier"] as const).map(t => (
+                    <button 
+                      key={t} 
+                      type="button" 
+                      onClick={() => setPaymentType(t)}
+                      className={cn(
+                        "py-2 text-xs font-bold rounded-lg transition-all",
+                        paymentType === t 
+                          ? "bg-[#0F172A] text-white shadow-sm" 
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-300/60"
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Select payment method used by customer for advance payments.
+                </p>
+              </div>
+
+              {/* Financial Inputs: Advance Amount & Delivery Charges */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Advance Payment Received</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono font-bold">Rs</span>
+                  <input 
+                    type="number" 
+                    min={0} 
+                    value={advancePayment === 0 ? "" : advancePayment} 
+                    placeholder="0"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setAdvancePayment(e.target.value === "" ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full pl-9 pr-3 py-2 text-sm font-mono font-bold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0F172A] focus:border-transparent bg-white" 
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Delivery Charges (DC)</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono font-bold">Rs</span>
+                  <input 
+                    type="number" 
+                    min={0} 
+                    value={deliveryCharges === 0 ? "" : deliveryCharges} 
+                    placeholder="0"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setDeliveryCharges(e.target.value === "" ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full pl-9 pr-3 py-2 text-sm font-mono font-bold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0F172A] focus:border-transparent bg-white" 
+                  />
                 </div>
               </div>
             </div>
-          )}
 
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-12 gap-x-4 gap-y-3">
-            <div className="sm:col-span-4">
-              <FieldInput label="WhatsApp" autoFocus value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="03001234567" maxLength={11} required className="font-mono text-sm py-1.5" />
+            {/* Special Instructions / Notes */}
+            <div className="space-y-1.5 pt-2 border-t border-slate-100">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Special Instructions / Notes</label>
+              <textarea 
+                value={notes} 
+                onChange={e => setNotes(e.target.value)} 
+                rows={2}
+                placeholder="Special instructions for this parcel (e.g. Call before delivery, urgent packing)..."
+                className="w-full px-3.5 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0F172A] focus:border-transparent bg-white resize-none" 
+              />
             </div>
-            <div className="sm:col-span-4">
-              <FieldInput label="Name" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer Name" required className="text-sm py-1.5" />
-            </div>
-            <div className="sm:col-span-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="block text-sm font-medium text-slate-700">City <span className="text-red-500">*</span></label>
-                <input
-                  list="pakistan-cities"
-                  value={city}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setCity(val);
-                    const foundProv = Object.entries(PROVINCE_CITIES).find(([_, cities]) => cities.some(c => c.toLowerCase() === val.toLowerCase()));
-                    if (foundProv) setProvince(foundProv[0]);
-                  }}
-                  placeholder="Select city"
-                  required
-                  className="block w-full rounded-md border-0 py-1.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#0F172A] sm:text-sm sm:leading-6 transition-all bg-white"
-                />
-                <datalist id="pakistan-cities">
-                  {(province ? PROVINCE_CITIES[province] : Object.values(PROVINCE_CITIES).flat().sort()).map(c => <option key={c} value={c} />)}
-                </datalist>
+          </div>
+
+          {/* ─── SECTION 03 — PRODUCTS & ITEMS ─── */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-[#0F172A] text-white text-xs font-bold font-mono">
+                  03
+                </span>
+                <h2 className="font-extrabold text-[#0F172A] text-base tracking-tight flex items-center gap-2">
+                  <Package size={18} className="text-slate-500" /> Products & Parcel Items
+                </h2>
               </div>
+              <button 
+                type="button" 
+                onClick={addProduct} 
+                className="text-xs font-bold text-[#0F172A] bg-slate-100 px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-200 transition-colors flex items-center gap-1.5"
+              >
+                <Plus size={14} /> Add Product Row
+              </button>
             </div>
-            <div className="sm:col-span-12">
-              <FieldInput label="Complete Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="House, Street, Area..." required className="text-sm py-1.5" />
-            </div>
-            <div className="sm:col-span-6">
-              <FieldSelect label="Province (Optional)" value={province} onChange={e => { 
-                setProvince(e.target.value); 
-              }} className="text-sm py-1.5">
-                <option value="">Select Province</option>
-                {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
-              </FieldSelect>
-            </div>
-            <div className="sm:col-span-6">
-              <FieldInput label="Alternate Phone (Optional)" value={altPhone} onChange={e => setAltPhone(e.target.value)} placeholder="03xxxxxxxxx" className="font-mono text-sm py-1.5" />
-            </div>
-          </div>
-        </div>
 
-        {/* Compact Products Card */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden focus-within:border-slate-300 transition-colors">
-          <div className="px-4 py-2 bg-slate-50/80 border-b border-slate-100 flex justify-between items-center">
-            <div className="font-semibold text-[#0F172A] text-sm flex items-center gap-2">
-              <Package size={14} className="text-slate-400" /> Products
-            </div>
-            <button type="button" onClick={addProduct} className="text-[11px] font-bold text-[#0F172A] bg-white px-2.5 py-1 rounded shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1">
-              <Plus size={12} /> Add Row
-            </button>
-          </div>
-          <div className="p-3">
-            <div className="hidden sm:grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1 mb-1.5">
-              <div className="col-span-6">Item Name</div>
-              <div className="col-span-2 text-center">Qty</div>
-              <div className="col-span-2 text-right">Price</div>
-              <div className="col-span-2 text-right">Total</div>
-            </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
+              <div className="hidden sm:grid grid-cols-12 gap-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1">
+                <div className="col-span-6">Item Description</div>
+                <div className="col-span-2 text-center">Qty</div>
+                <div className="col-span-2 text-right">Unit Price (Rs)</div>
+                <div className="col-span-2 text-right">Line Total (Rs)</div>
+              </div>
+
               {products.map((p, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center bg-slate-50/50 p-1.5 rounded-lg border border-slate-100/50">
+                <div key={i} className="grid grid-cols-12 gap-2 sm:gap-3 items-center bg-slate-50/70 p-2 sm:p-2.5 rounded-xl border border-slate-200/80 group">
                   <div className="col-span-12 sm:col-span-6">
-                    <input value={p.name} onChange={e => updateProduct(i, "name", e.target.value)}
-                      placeholder="e.g. King Size Bedsheet" required
-                      className="w-full px-2.5 py-1.5 text-[13px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 bg-white" />
+                    <input 
+                      value={p.name} 
+                      onChange={e => updateProduct(i, "name", e.target.value)}
+                      placeholder="e.g. King Size Bedsheet Set (3 Pcs)" 
+                      required
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A] bg-white font-medium" 
+                    />
                   </div>
                   <div className="col-span-4 sm:col-span-2">
-                    <input type="number" min={1} value={p.qty} 
+                    <input 
+                      type="number" 
+                      min={1} 
+                      value={p.qty} 
                       onFocus={e => e.target.select()}
-                      onChange={e => updateProduct(i, "qty", e.target.value === "" ? "" : parseInt(e.target.value))} required
-                      className="w-full px-2 py-1.5 text-[13px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-center font-mono bg-white" />
+                      onChange={e => updateProduct(i, "qty", e.target.value === "" ? "" : parseInt(e.target.value))} 
+                      required
+                      className="w-full px-2 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A] text-center font-mono font-bold bg-white" 
+                    />
                   </div>
                   <div className="col-span-5 sm:col-span-2">
-                    <input type="number" min={0} value={p.price === 0 ? "" : p.price} 
+                    <input 
+                      type="number" 
+                      min={0} 
+                      value={p.price === 0 ? "" : p.price} 
                       onFocus={e => e.target.select()}
-                      onChange={e => updateProduct(i, "price", e.target.value === "" ? "" : parseInt(e.target.value))} placeholder="0" required
-                      className="w-full px-2 py-1.5 text-[13px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono bg-white" />
+                      onChange={e => updateProduct(i, "price", e.target.value === "" ? "" : parseInt(e.target.value))} 
+                      placeholder="0" 
+                      required
+                      className="w-full px-2 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A] text-right font-mono font-bold bg-white" 
+                    />
                   </div>
                   <div className="col-span-3 sm:col-span-2 flex items-center justify-end gap-2 pr-1">
-                    <span className="font-mono text-[13px] font-bold text-[#0F172A]">
+                    <span className="font-mono text-xs font-extrabold text-[#0F172A]">
                       {(Number(p.qty) || 0) * (Number(p.price) || 0) > 0 ? ((Number(p.qty) || 0) * (Number(p.price) || 0)).toLocaleString() : "—"}
                     </span>
                     {products.length > 1 && (
-                      <button type="button" onClick={() => removeProduct(i)} className="text-slate-300 hover:text-red-500 transition-colors">
-                        <X size={14} />
+                      <button 
+                        type="button" 
+                        onClick={() => removeProduct(i)} 
+                        className="text-slate-300 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+                        title="Delete Product Row"
+                      >
+                        <X size={15} />
                       </button>
                     )}
                   </div>
@@ -2230,127 +2439,97 @@ function CreateOrderScreen({
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Right Column: Order Summary & Actions */}
-      <div className="w-full lg:w-80 flex-shrink-0">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm sticky top-20 flex flex-col">
-          <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-100 font-semibold text-[#0F172A] text-sm flex items-center gap-2">
-            <Receipt size={14} className="text-slate-400" /> Summary
-          </div>
-          
-          <div className="p-4 space-y-4 flex-1">
-            {/* Totals */}
-            <div className="space-y-2 text-[13px]">
-              <div className="flex justify-between text-slate-500">
-                <span>Subtotal</span>
-                <span className="font-mono font-medium">{formatPKR(subtotal)}</span>
-              </div>
-              <div className="flex justify-between items-center text-slate-500">
-                <span>Delivery (DC)</span>
-                <input type="number" min={0} 
-                  value={deliveryCharges === 0 ? "" : deliveryCharges} 
-                  placeholder="0"
-                  onFocus={e => e.target.select()}
-                  onChange={e => setDeliveryCharges(e.target.value === "" ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-20 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono" />
-              </div>
-              <div className="flex justify-between font-semibold text-slate-700 border-t border-slate-100 pt-1.5">
-                <span>Grand Total</span>
-                <span className="font-mono">{formatPKR(grandTotal)}</span>
-              </div>
-              {advancePayment > 0 && (
-                <div className="flex justify-between items-center text-emerald-600 font-medium">
-                  <span>Advance Paid</span>
-                  <span className="font-mono">- {formatPKR(advancePayment)}</span>
-                </div>
-              )}
-              <div className="flex justify-between border-t border-slate-100 pt-2 mt-2 font-bold text-base text-[#0F172A]">
-                <span>{orderType === "COD" ? "COD Amount" : "Payment Status"}</span>
-                <span className="font-mono text-[#D4AF37]">
-                  {orderType === "COD" 
-                    ? formatPKR(remainingAmount) 
-                    : (remainingAmount === 0 ? "Fully Paid (COD: Rs 0)" : formatPKR(remainingAmount))}
-                </span>
-              </div>
+        {/* Right Column: Sticky Summary Panel & Save Actions (3.5 / 12 Cols = ~29%) */}
+        <div className="lg:col-span-4 space-y-5 sticky top-20">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden flex flex-col">
+            <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-100 font-bold text-[#0F172A] text-xs uppercase tracking-wider flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Receipt size={16} className="text-slate-500" /> Financial Summary
+              </span>
+              <span className="font-mono text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-bold">
+                {products.length} {products.length === 1 ? "Item" : "Items"}
+              </span>
             </div>
+            
+            <div className="p-5 space-y-4">
+              {/* Financial Calculation Stack */}
+              <div className="space-y-2.5 text-xs font-mono">
+                <div className="flex justify-between text-slate-600">
+                  <span className="font-sans">Subtotal ({products.reduce((a, b) => a + (Number(b.qty) || 0), 0)} pcs)</span>
+                  <span className="font-bold text-slate-900">{formatPKR(subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span className="font-sans">Delivery Charges (DC)</span>
+                  <span className="font-bold text-slate-900">{formatPKR(deliveryCharges)}</span>
+                </div>
+                
+                <div className="border-t border-slate-100 pt-2 flex justify-between font-bold text-sm text-slate-900">
+                  <span className="font-sans">Grand Total</span>
+                  <span className="text-[#0F172A] font-extrabold">{formatPKR(grandTotal)}</span>
+                </div>
 
-            <div className="w-full h-px bg-slate-100" />
+                {advancePayment > 0 && (
+                  <div className="flex justify-between text-emerald-700 font-bold bg-emerald-50 p-2 rounded-xl border border-emerald-100">
+                    <span className="font-sans">Advance Received</span>
+                    <span>- {formatPKR(advancePayment)}</span>
+                  </div>
+                )}
 
-            {/* Quick Toggles */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Type</label>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                  {(["COD", "NON-COD"] as const).map(t => (
-                    <button key={t} type="button" onClick={() => handleOrderTypeChange(t)}
-                      className={cn(
-                        "flex-1 py-1 text-[11px] font-bold rounded transition-colors",
-                        orderType === t ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-black/5" : "text-slate-500 hover:bg-slate-800 hover:text-white"
-                      )}>
-                      {t}
-                    </button>
-                  ))}
+                {/* Final COD Amount Highlight */}
+                <div className="border-t-2 border-slate-800 pt-3 mt-3">
+                  <div className="text-[10px] uppercase font-sans font-bold text-slate-400 tracking-wider">
+                    {orderType === "COD" ? "Cash To Collect On Delivery (COD)" : "Payment Status"}
+                  </div>
+                  <div className="text-2xl font-extrabold font-mono text-[#D4AF37] mt-1">
+                    {orderType === "COD" 
+                      ? formatPKR(remainingAmount) 
+                      : (remainingAmount === 0 ? "Fully Paid (Rs 0 COD)" : formatPKR(remainingAmount))}
+                  </div>
                 </div>
               </div>
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Advance via</label>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                  {(["Online", "Courier"] as const).map(t => (
-                    <button key={t} type="button" onClick={() => setPaymentType(t)}
-                      className={cn(
-                        "flex-1 py-1 text-[11px] font-bold rounded transition-colors",
-                        paymentType === t ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-black/5" : "text-slate-500 hover:text-slate-700"
-                      )}>
-                      {t}
-                    </button>
-                  ))}
+
+              {/* Compact Quick Summary Pill Preview */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5 text-[11px] font-mono text-slate-600">
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-sans">Type:</span>
+                  <span className={cn("font-bold", orderType === "COD" ? "text-emerald-700" : "text-indigo-700")}>{orderType}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-sans">Channel:</span>
+                  <span className="font-bold text-slate-800">{paymentType}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-sans">Agent:</span>
+                  <span className="font-bold text-slate-800">{handledBy}</span>
                 </div>
               </div>
             </div>
 
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Advance Amount</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono">Rs</span>
-                <input type="number" min={0} 
-                  value={advancePayment === 0 ? "" : advancePayment} 
-                  placeholder="0"
-                  onFocus={e => e.target.select()}
-                  onChange={e => setAdvancePayment(e.target.value === "" ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors" />
-              </div>
-            </div>
+            {/* Primary Actions Footer */}
+            <div className="p-4 bg-slate-50/80 border-t border-slate-100 space-y-2.5">
+              <button 
+                onClick={() => handleSave(false)} 
+                disabled={isSubmitting || saved}
+                className="w-full py-3 bg-[#0F172A] hover:bg-[#1E293B] text-white rounded-xl text-xs font-extrabold shadow-md flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving Parcel...</>
+                ) : saved ? (
+                  <><Check size={16} /> Order Saved!</>
+                ) : (
+                  <><Save size={16} /> SAVE PARCEL</>
+                )}
+              </button>
 
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Notes</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-                placeholder="Special instructions..."
-                className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 resize-none" />
+              <button 
+                onClick={() => handleSave(true)} 
+                disabled={isSubmitting || saved}
+                className="w-full py-2.5 bg-white hover:bg-slate-100 text-[#0F172A] border border-slate-300 rounded-xl text-xs font-bold shadow-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Printer size={15} /> Save & Print Label
+              </button>
             </div>
-          </div>
-
-          <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col gap-2 rounded-b-xl">
-            <button 
-              onClick={() => handleSave(false)} 
-              disabled={isSubmitting || saved}
-              className="w-full py-2.5 bg-[#0F172A] hover:bg-[#1E293B] text-white rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? (
-                <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
-              ) : saved ? (
-                <><Check size={16} /> Saved!</>
-              ) : (
-                <><Save size={16} /> Save Order</>
-              )}
-            </button>
-            <button 
-              onClick={() => handleSave(true)} 
-              disabled={isSubmitting || saved}
-              className="w-full py-2 bg-white hover:bg-slate-50 text-[#0F172A] border border-slate-200 rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Printer size={16} /> Save & Print
-            </button>
           </div>
         </div>
       </div>
