@@ -849,8 +849,8 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
   onViewOrder: (id: string) => void;
   onEditOrder: (id: string) => void;
   onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
-  onUpdateStatus?: (id: string, status: OrderStatus) => void;
-  onReceiveCOD?: (id: string, date: string) => void;
+  onUpdateStatus?: (id: string, status: OrderStatus, hasTracking?: boolean) => void;
+  onReceiveCOD?: (id: string, date: string, hasTracking?: boolean) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [codStatusFilter, setCodStatusFilter] = useState<string>("all");
@@ -1134,16 +1134,21 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
                       </button>
                       {o.status !== "delivered" && onUpdateStatus && (
                         <button
-                          onClick={() => onUpdateStatus(o._id || o.id, "delivered")}
-                          className="p-1 text-emerald-600 hover:text-emerald-800 rounded hover:bg-emerald-50 border border-emerald-200 inline-flex"
-                          title="Mark as Delivered"
+                          onClick={() => onUpdateStatus(o._id || o.id, "delivered", Boolean(o.trackingNo))}
+                          className={cn(
+                            "p-1 rounded border inline-flex transition-all",
+                            o.trackingNo 
+                              ? "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200" 
+                              : "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                          )}
+                          title={o.trackingNo ? "Mark as Delivered" : "Tracking Number required before marking Delivered"}
                         >
                           <CheckCircle2 size={14} />
                         </button>
                       )}
                       {o.status !== "returned" && o.status !== "delivered" && onUpdateStatus && (
                         <button
-                          onClick={() => onUpdateStatus(o._id || o.id, "returned")}
+                          onClick={() => onUpdateStatus(o._id || o.id, "returned", Boolean(o.trackingNo))}
                           className="p-1 text-rose-600 hover:text-rose-800 rounded hover:bg-rose-50 border border-rose-200 inline-flex"
                           title="Mark as Returned"
                         >
@@ -1152,9 +1157,14 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
                       )}
                       {o.codStatus === "pending" && onReceiveCOD && (
                         <button
-                          onClick={() => onReceiveCOD(o._id || o.id, new Date().toISOString().split('T')[0])}
-                          className="px-1.5 py-0.5 text-amber-700 hover:text-amber-900 rounded hover:bg-amber-100 bg-amber-50 border border-amber-300 font-bold text-[10px] inline-flex items-center gap-1 shadow-sm"
-                          title="Mark COD Cash Received"
+                          onClick={() => onReceiveCOD(o._id || o.id, new Date().toISOString().split('T')[0], Boolean(o.trackingNo))}
+                          className={cn(
+                            "px-1.5 py-0.5 rounded font-bold text-[10px] inline-flex items-center gap-1 shadow-sm transition-all",
+                            o.trackingNo
+                              ? "text-amber-700 hover:text-amber-900 hover:bg-amber-100 bg-amber-50 border border-amber-300"
+                              : "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                          )}
+                          title={o.trackingNo ? "Mark COD Cash Received" : "Tracking Number required before receiving COD"}
                         >
                           <Banknote size={12} />
                           <span>Receive</span>
@@ -1179,7 +1189,7 @@ function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder,
   onViewOrder: (id: string) => void;
   onEditOrder: (id: string) => void;
   onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
-  onUpdateStatus?: (id: string, status: OrderStatus) => void;
+  onUpdateStatus?: (id: string, status: OrderStatus, hasTracking?: boolean) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [courierFilter, setCourierFilter] = useState<string>("all");
@@ -1440,16 +1450,21 @@ function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder,
                       </button>
                       {o.status !== "delivered" && onUpdateStatus && (
                         <button
-                          onClick={() => onUpdateStatus(o._id || o.id, "delivered")}
-                          className="p-1 text-emerald-600 hover:text-emerald-800 rounded hover:bg-emerald-50 border border-emerald-200 inline-flex"
-                          title="Mark as Delivered"
+                          onClick={() => onUpdateStatus(o._id || o.id, "delivered", Boolean(o.trackingNo))}
+                          className={cn(
+                            "p-1 rounded border inline-flex transition-all",
+                            o.trackingNo 
+                              ? "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200" 
+                              : "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                          )}
+                          title={o.trackingNo ? "Mark as Delivered" : "Tracking Number required before marking Delivered"}
                         >
                           <CheckCircle2 size={14} />
                         </button>
                       )}
                       {o.status !== "returned" && o.status !== "delivered" && onUpdateStatus && (
                         <button
-                          onClick={() => onUpdateStatus(o._id || o.id, "returned")}
+                          onClick={() => onUpdateStatus(o._id || o.id, "returned", Boolean(o.trackingNo))}
                           className="p-1 text-rose-600 hover:text-rose-800 rounded hover:bg-rose-50 border border-rose-200 inline-flex"
                           title="Mark as Returned"
                         >
@@ -2072,7 +2087,7 @@ function OrdersScreen({
   onEditOrder: (id: string) => void;
   orders: Order[];
   onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
-  onUpdateStatus?: (id: string, status: OrderStatus) => void;
+  onUpdateStatus?: (id: string, status: OrderStatus, hasTracking?: boolean) => void;
 }) {
   const [orderTypeFilter, setOrderTypeFilter] = useState<"all" | "COD" | "NON-COD">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -2361,13 +2376,19 @@ function OrdersScreen({
                           <Edit2 size={14} />
                         </button>
                         {status !== "delivered" && onUpdateStatus && (
-                          <button onClick={() => onUpdateStatus(o._id || o.id, "delivered")}
-                            className="p-1.5 rounded-md hover:bg-emerald-50 border border-transparent hover:border-emerald-200 text-emerald-600 transition-all" title="Mark as Delivered">
+                          <button onClick={() => onUpdateStatus(o._id || o.id, "delivered", Boolean(o.trackingNo))}
+                            className={cn(
+                              "p-1.5 rounded-md border transition-all",
+                              o.trackingNo
+                                ? "hover:bg-emerald-50 border-transparent hover:border-emerald-200 text-emerald-600"
+                                : "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                            )}
+                            title={o.trackingNo ? "Mark as Delivered" : "Tracking Number required before marking Delivered"}>
                             <CheckCircle2 size={14} />
                           </button>
                         )}
                         {status !== "returned" && status !== "delivered" && onUpdateStatus && (
-                          <button onClick={() => onUpdateStatus(o._id || o.id, "returned")}
+                          <button onClick={() => onUpdateStatus(o._id || o.id, "returned", Boolean(o.trackingNo))}
                             className="p-1.5 rounded-md hover:bg-rose-50 border border-transparent hover:border-rose-200 text-rose-600 transition-all" title="Mark as Returned">
                             <XCircle size={14} />
                           </button>
@@ -4625,6 +4646,11 @@ export default function App() {
   };
 
   const handleUpdateStatus = (orderId: string, status: OrderStatus) => {
+    const targetOrder = orders.find((o: any) => o.id === orderId || o._id === orderId);
+    if ((status === 'delivered' || status === 'shipped') && (!targetOrder || !targetOrder.trackingNo)) {
+      showGlobalToast("⚠️ Tracking Required: Please assign a Tracking Number & Courier first in Tracking section!", "error");
+      return;
+    }
     updateOrderMut.mutate({
       id: orderId,
       data: { status, actionName: `Marked as ${status}` }
@@ -4632,6 +4658,11 @@ export default function App() {
   };
 
   const handleReceiveCOD = (orderId: string, date: string) => {
+    const targetOrder = orders.find((o: any) => o.id === orderId || o._id === orderId);
+    if (!targetOrder || !targetOrder.trackingNo) {
+      showGlobalToast("⚠️ Tracking Required: Please assign a Tracking Number & Courier first in Tracking section!", "error");
+      return;
+    }
     updateOrderMut.mutate({
       id: orderId,
       data: { codStatus: 'received', status: 'delivered', actionName: "COD Received" }

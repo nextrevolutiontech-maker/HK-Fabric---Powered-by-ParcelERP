@@ -616,6 +616,16 @@ export const OrderService = {
       }
     }
 
+    // Enforce Business Rule: Cannot mark order as Delivered/Shipped or COD Received without a Tracking Number
+    const targetStatus = status ? status.toLowerCase() : existingOrder.status.toLowerCase();
+    const targetCodStatus = codStatus ? codStatus.toLowerCase() : existingOrder.codStatus.toLowerCase();
+    const hasTrackingNumber = existingOrder.trackingEntries && existingOrder.trackingEntries.length > 0 && Boolean(existingOrder.trackingEntries[0]?.trackingNumber);
+    const isAddingTrackingNow = Boolean(trackingNumber && trackingNumber.trim());
+
+    if ((targetStatus === 'delivered' || targetStatus === 'shipped' || targetCodStatus === 'received') && !hasTrackingNumber && !isAddingTrackingNow) {
+      throw new Error(`Cannot set Order #${existingOrder.orderNo} to ${targetStatus.toUpperCase()} because no Tracking Number or Courier has been assigned yet. Please assign tracking first.`);
+    }
+
     const isTrackingBeingModified = Boolean(trackingNumber || trackingNumber2 || courierName);
     if (isTrackingBeingModified) {
       if (existingOrder.status === 'void' || existingOrder.status === 'VOID') {
