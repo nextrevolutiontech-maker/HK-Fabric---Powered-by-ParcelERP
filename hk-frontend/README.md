@@ -34,37 +34,32 @@ graph TD
 
 ## ⚡ Engineering & Scalability Highlights
 
-### 1. 🚀 O(1) Order Number Generator (400x Acceleration)
-- **Problem:** Legacy sequential candidate number checking executed 100+ database loop queries, taking **20 Seconds (20,000ms)** per order.
+### 1. 🛡️ Mandatory Tracking Number Safeguard Rule (COD & Non-COD)
+- **Rule:** Parcels WITHOUT a Tracking Number (`Awaiting Tracking Number`) **CANNOT** be marked as `Delivered`, `Shipped`, or `COD Received`.
+- **Enforcement:** Enforced at both Frontend UI (button tooltip + Red Toast Alert) and Backend Service (`OrderService.updateOrder` returning HTTP 400 Bad Request if attempted).
+
+### 2. 🚀 O(1) Order Number Generator (400x Acceleration)
 - **Solution:** Implemented single indexed $O(1)$ `findFirst` query for the highest `orderNo` prefix (`HKF-2026-XXXXXX`).
 - **Result:** Order Creation Latency dropped from **20,000ms $\rightarrow$ 50ms (400x Faster)**.
 
-### 2. ⚡ 1-Click Direct Table Action Controls
+### 3. ⚡ 1-Click Direct Table Action Controls
 - Added direct 1-click status update controls right in table rows:
-  - **`Mark Delivered` (Green Check Icon):** Instant status shift to `Delivered`.
+  - **`Mark Delivered` (Green Check Icon):** Instant status shift to `Delivered` (requires Tracking Number).
   - **`Mark Returned` (Rose X Icon):** Instant status shift to `Returned`.
-  - **`Receive COD` (Amber Banknote Badge):** Instant COD Payment status update to `Received`.
+  - **`Receive COD` (Amber Banknote Badge):** Instant COD Payment status update to `Received` (requires Tracking Number).
 
-### 3. 🔍 Search Bar Debouncing Engine (`useDebounce` Hook with 300ms Delay)
-- **Problem:** Keystroke-by-keystroke input changes caused 11 heavy array filters and layout reflows per phone number typed.
+### 4. 🔍 Search Bar Debouncing Engine (`useDebounce` Hook with 300ms Delay)
 - **Solution:** Created custom `useDebounce` hook with 300ms delay window across Global Search (⌘K), COD Parcels, Non-COD Parcels, and All Parcels.
 - **Capability:** Multi-field searching matching Order #, Customer Name, Phone, Tracking #, City, AND Address.
 
-### 4. 🛡️ Idempotency Keys & Double-Submit Protection
-- **Problem:** Double-clicking "Save Order" or slow network retries created duplicate orders in the database.
+### 5. 🛡️ Idempotency Keys & Double-Submit Protection
 - **Solution:** Integrated `x-idempotency-key` HTTP headers (`order-[ID]-[WhatsApp]-[Amount]`) and a 15-minute sliding window DB duplicate check (returns HTTP 409 Conflict with an interactive Duplicate Warning Modal).
 
-### 5. ⚖️ Mathematical Financial Classification Engine (COD vs NON-COD)
+### 6. ⚖️ Mathematical Financial Classification Engine (COD vs NON-COD)
 - **Formula:** $\text{Net COD Amount (Remaining Balance)} = \max(0, \text{Grand Total} - \text{Advance Payment})$.
 - **Strict Rule:**
   - If $\text{Remaining Balance} == 0 \implies$ Order is **100% AUTOMATICALLY "NON-COD"** (100% Advance Payment).
   - If $\text{Remaining Balance} > 0 \implies$ Order is **100% AUTOMATICALLY "COD"** (Courier collects cash on delivery).
-- **Database Auto-Self-Correction:** Startup queries automatically rectify legacy zero-balance COD orders into NON-COD.
-
-### 6. ⚡ Zero-Flicker SPA Navigation & Single Order API
-- Outer App Shell (`Sidebar` and `Header`) is memoized using `React.memo` for **0% re-renders** during tab switches.
-- TanStack React Query `placeholderData: keepPreviousData` holds previous data smoothly on screen, eliminating full-page spinners and visual flickering.
-- Added `GET /api/orders/[id]` and `OrderService.getOrderById` for single order fetching by UUID or Order Number.
 
 ---
 
@@ -74,9 +69,9 @@ graph TD
 | :--- | :--- |
 | **`Dashboard`** | Live metrics (Today Sales, Today COD Sales, Today Non-COD Sales, Parcel Status Chart, Recent Activity Log). |
 | **`Create Parcel`** | Dynamic order creation form with auto-calculated Net COD Amount, duplicate detection, and instant print labels. |
-| **`COD Parcels`** | Dedicated view for orders requiring Cash-on-Delivery. Includes sub-tabs for `All COD`, `Awaiting Tracking`, and `Tracked / Shipped` + 1-Click Action Controls. |
-| **`Non-COD Parcels`** | Dedicated view for Prepaid / Online Paid orders. Includes sub-tabs for `All Non-COD`, `Awaiting Tracking`, and `Tracked / Shipped` + 1-Click Action Controls. |
-| **`All Parcels`** | Master parcel repository with dedicated **TYPE** badges (`COD` / `NON-COD`), debounced search, and quick filter sub-tabs + 1-Click Action Controls. |
+| **`COD Parcels`** | Dedicated view for orders requiring Cash-on-Delivery. Includes sub-tabs for `All COD`, `Awaiting Tracking`, and `Tracked / Shipped` + 1-Click Action Controls + Tracking Safeguard. |
+| **`Non-COD Parcels`** | Dedicated view for Prepaid / Online Paid orders. Includes sub-tabs for `All Non-COD`, `Awaiting Tracking`, and `Tracked / Shipped` + 1-Click Action Controls + Tracking Safeguard. |
+| **`All Parcels`** | Master parcel repository with dedicated **TYPE** badges (`COD` / `NON-COD`), debounced search, and quick filter sub-tabs + 1-Click Action Controls + Tracking Safeguard. |
 | **`Tracking`** | Centralized courier slip (*parchi*) tracking entry with sub-tabs (`COD Awaiting`, `NON-COD Awaiting`, `All Awaiting`). |
 | **`COD Receiving`** | Courier cash collection entry for marking received payments. |
 | **`Settlements`** | Courier payment reconciliation and automated bill matching. |

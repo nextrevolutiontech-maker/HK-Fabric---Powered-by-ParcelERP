@@ -1494,7 +1494,7 @@ function CreateOrderScreen({
 }: {
   setScreen: (s: Screen) => void;
   orders: Order[];
-  onSaveOrder: (order: Order) => void;
+  onSaveOrder: (order: Order) => Promise<any> | void;
   editOrderId: string | null;
   clearEditId: () => void;
 }) {
@@ -1589,7 +1589,7 @@ function CreateOrderScreen({
   const updateProduct = (i: number, field: string, val: string | number) =>
     setProducts(p => p.map((row, idx) => idx === i ? { ...row, [field]: val } : row));
 
-  const handleSave = (shouldPrintAfter: boolean = false) => {
+  const handleSave = async (shouldPrintAfter: boolean = false) => {
     if (isSubmitting || saved) return;
 
     if (!whatsapp.trim()) {
@@ -1647,7 +1647,7 @@ function CreateOrderScreen({
     };
 
     try {
-      onSaveOrder(newOrder);
+      await onSaveOrder(newOrder);
       setSaved(true);
       if (shouldPrintAfter) {
         setShowPrint(true);
@@ -4596,7 +4596,7 @@ export default function App() {
     setScreen("create-order");
   };
 
-  const handleSaveOrder = (newOrder: Order) => {
+  const handleSaveOrder = async (newOrder: Order) => {
     const existing = orders.find((o: any) => o.id === newOrder.id);
     if (existing) {
       const payload = {
@@ -4623,9 +4623,9 @@ export default function App() {
         status: newOrder.status,
         codStatus: newOrder.codStatus,
       };
-      updateOrderMut.mutate({ id: newOrder.id, data: payload });
+      return await updateOrderMut.mutateAsync({ id: newOrder.id, data: payload });
     } else {
-      createOrderMut.mutate(newOrder);
+      return await createOrderMut.mutateAsync(newOrder);
     }
   };
 
@@ -4819,13 +4819,13 @@ export default function App() {
       />
 
       {duplicateWarning && (
-        <Modal open={Boolean(duplicateWarning)} onClose={() => setDuplicateWarning(null)} title="⚠ Possible Duplicate Parcel">
+        <Modal open={Boolean(duplicateWarning)} onClose={() => setDuplicateWarning(null)} title="⚠️ Order Already Saved / Duplicate Alert">
           <div className="space-y-4 font-sans">
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
-              <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-start gap-2">
+              <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold block">An identical parcel was recently created for this customer!</span>
-                Please review the existing order details below before proceeding.
+                <span className="font-bold block text-sm">Order #{duplicateWarning.orderNo} was ALREADY SAVED in database!</span>
+                If you just pressed Save, your order was already created successfully. Click <span className="font-bold text-emerald-700 font-mono">View Saved Order</span> below to inspect it.
               </div>
             </div>
 
@@ -4845,14 +4845,16 @@ export default function App() {
                   setDuplicateWarning(null);
                   handleViewOrder(orderId);
                 }}
-                className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition-colors"
+                className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
               >
-                View Existing Order
+                <Eye size={16} /> View Saved Order #{duplicateWarning.orderNo}
               </button>
               
               <button
                 onClick={async () => {
                   if (!duplicateWarning.newOrderPayload) return;
+                  const confirmForce = confirm("Are you sure you want to create a SECOND separate parcel for the same customer?");
+                  if (!confirmForce) return;
                   const payloadToForce = duplicateWarning.newOrderPayload;
                   setDuplicateWarning(null);
                   try {
@@ -4862,14 +4864,15 @@ export default function App() {
                     alert(err.message || "Failed to create order");
                   }
                 }}
-                className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow-sm transition-colors"
+                className="py-2 px-3 bg-white border border-slate-300 hover:bg-slate-100 text-slate-600 font-medium rounded-lg text-xs transition-colors"
+                title="Only use if customer placed two separate distinct orders"
               >
-                Confirm & Create Anyway
+                Force Create 2nd Order
               </button>
 
               <button
                 onClick={() => setDuplicateWarning(null)}
-                className="py-2 px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-medium rounded-lg text-xs transition-colors"
+                className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-lg text-xs transition-colors"
               >
                 Cancel
               </button>

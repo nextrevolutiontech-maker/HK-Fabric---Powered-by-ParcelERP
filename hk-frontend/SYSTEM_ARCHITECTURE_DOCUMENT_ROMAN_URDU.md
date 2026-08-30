@@ -33,69 +33,44 @@ graph TD
 
 ---
 
-## ⚡ 2. The O(1) Order Number Generator Optimization (400x Speedup)
+## 🛡️ 2. Mandatory Tracking Number Safeguard Rule (COD & NON-COD)
 
-### 🔴 The Technical Failure (Pehle Kya Masla Tha?):
-Legacy system naya `orderNo` (`HKF-2026-000001`, `HKF-2026-000002`...) generate karne ke liye linear loop run karta tha. System database mein har candidate number ke liye distinct query bhejta tha ke number exist karta hai ya nahi.
-- **Complexity:** $O(N)$ Database Roundtrips.
-- **Latency:** **20,000ms (20 Seconds!)** per order creation.
-- **Consequence:** Network Timeout, Connection Pool Exhaustion, HTTP 500 Internal Server Errors under high concurrency.
+### 🔴 The Business Integrity Gap (Pehle Kya Masla Tha?):
+Ager kisi parcel par Courier Tracking Number assign nahi hua tha (`Awaiting Tracking Number`), to system untracked / unshipped parcel ko bhi `Delivered` mark karne de raha tha, jo physical reality aur courier accounts report ko corrupt kar sakta tha.
 
-### 🟢 The Engineering Solution (Single Indexed Max Query):
-Humne DB query ko single indexed $O(1)$ query se replace kiya:
+### 🟢 The Engineering Rule Safeguard (Frontend & Backend Enforced):
+Humne 2-Layer Protection System implement kiya hai jo **COD Parcels** aur **NON-COD Parcels** dono par 100% strictly enforce hota hai:
 
-```typescript
-const lastOrder = await tx.order.findFirst({
-  where: { orderNo: { startsWith: orderNoPrefix } },
-  orderBy: { orderNo: 'desc' },
-  select: { orderNo: true }
-});
-
-let nextSeq = 1;
-if (lastOrder && lastOrder.orderNo) {
-  const parts = lastOrder.orderNo.split("-");
-  const lastSeq = parseInt(parts[parts.length - 1], 10);
-  if (!isNaN(lastSeq)) {
-    nextSeq = lastSeq + 1;
-  }
-}
-const generatedOrderNo = `${orderNoPrefix}-${String(nextSeq).padStart(6, "0")}`;
-```
+1. **Frontend Guard & Visual Feedback:**  
+   - Untracked parcels par `Mark Delivered` aur `Receive COD` buttons greyed out / opacity 60% rehte hain with tooltip: *"Tracking Number required before marking Delivered"*.  
+   - Button click hone par system request block karke instant Red Toast Alert trigger karta hai:  
+     `⚠️ Tracking Required: Please assign a Tracking Number & Courier first in Tracking section!`
+2. **Backend Service Validation (`OrderService.updateOrder`):**  
+   - Backend API query check karti hai ke agar `status === 'delivered'` ya `status === 'shipped'` ya `codStatus === 'received'` set karne ki request aaye aur order ke sath valid tracking number linked na ho, to server immediate HTTP 400 Bad Request error return karta hai:  
+     `"Cannot set Order #HKF-2026-XXXXXX to DELIVERED because no Tracking Number or Courier has been assigned yet. Please assign tracking first."`
 
 ---
 
-## 🛡️ 3. Idempotency Keys & Duplicate Entry Warning Modal (HTTP 409 Protection)
+## ⚡ 3. The O(1) Order Number Generator Optimization (400x Speedup)
 
-### 🔴 The Risk (Double-Submit Vulnerability):
-E-commerce systems mein user fast double-click, unstable mobile network, ya retry policy ki waja se same order data backend par fraction of a second mein do dafa bhej deta hai.
-
-### 🟢 The Engineering Safeguards & Interactive Warning UI:
-1. **HTTP Idempotency Header:**  
-   Frontend har order create request ke sath unique Header generate karke bhejta hai:  
-   `x-idempotency-key: order-[ID]-[WhatsApp]-[Amount]`
-2. **15-Minute Recent Duplicate Detection Engine:**  
-   Backend database query check karta hai ke kya pichle 15 minute mein same customer phone aur total amount ka order submit hua hai. Matches return hone par API **HTTP 409 Conflict** return karti hai.
-3. **Interactive Duplicate Warning Modal & Red Toast:**  
-   HTTP 409 Conflict aate hi UI par instant Red Toast Notification aur **`Possible Duplicate Parcel Warning Modal`** pop up hota hai. Is modal mein user ko pichle order ka Number, Customer Name, Phone, Amount, aur Status dikhaya jata hai, aur 2 clear buttons milte hain:
-   - **`View Existing Order`** (Opens previous order details).
-   - **`Proceed Anyway / Create Order`** (Force save if user confirms it's a genuine repeated order).
+### 🟢 The Engineering Solution:
+Single indexed $O(1)$ query for the highest `orderNo` prefix (`HKF-2026-XXXXXX`), reducing order creation latency from **20,000ms $\rightarrow$ 50ms (400x Faster)**.
 
 ---
 
-## 🔍 4. Search Bar Debouncing Engine (`useDebounce` Hook with 300ms Delay)
+## 🛡️ 4. Idempotency Keys & Duplicate Entry Warning Modal (HTTP 409 Protection)
 
-### 🟢 The Engineering Solution (Debounced Filtering Pattern):
+### 🟢 Interactive Warning UI:
+1. **HTTP Idempotency Header:** `x-idempotency-key: order-[ID]-[WhatsApp]-[Amount]`
+2. **15-Minute Recent Duplicate Detection Engine:** Server returns HTTP 409 Conflict for identical submissions.
+3. **Interactive Duplicate Warning Modal & Red Toast:** Displays previous order details (Order #, Customer Name, Phone, Amount, Status) with options to **View Existing Order** or **Proceed Anyway**.
+
+---
+
+## 🔍 5. Search Bar Debouncing Engine (`useDebounce` Hook with 300ms Delay)
+
+### 🟢 Debounced Filtering Pattern:
 Custom `useDebounce` hook with 300ms delay window across Global Search (⌘K), COD Parcels, Non-COD Parcels, and All Parcels. Matches Order #, Customer Name, Phone, Tracking #, City, AND Address.
-
----
-
-## ⚡ 5. 1-Click Direct Parcel Action Controls (Delivered, Returned, Receive COD)
-
-### 🟢 1-Click Action Controls:
-Staff operations ko super-fast banane ke liye table rows mein 1-Click direct action icons add kar diye hain:
-- **`Mark as Delivered` (Green Check Circle):** Courier site check karne ke baad 1-click par parcel status `Delivered` ho jata hai.
-- **`Mark as Returned` (Red X Circle):** Non-delivery case mein 1-click par parcel status `Returned` update ho jata hai.
-- **`Mark COD Received` (Amber Banknote Badge):** Cash received hone par 1-click par COD Status `Received` aur status `Delivered` ho jata hai.
 
 ---
 
@@ -112,25 +87,23 @@ $$\text{Net COD Amount (Remaining Balance)} = \max(0, \text{Grand Total} - \text
 
 ---
 
-### ❓ Q1: "HTTP 409 Conflict error aane par screen par Duplicate Entry Warning kaise show hoti hai?"
+### ❓ Q1: "Untracked parcels ko Delivered mark na karne ki kya security logic hai?"
 > **💬 Ideal Answer (Technical Response):**  
-> "Jab same customer phone aur total amount ka order pichle 15 minutes mein submit hota hai, to backend HTTP 409 Conflict return karta hai. React Mutation handler is response par 2 components trigger karta hai:  
-> 1. Red Toast Notification (`⚠️ Duplicate Parcel Alert: An identical order exists for this customer!`).  
-> 2. `DuplicateWarningModal` component, jo screen par pop up ho kar pichle order ki saari details (Order #, Name, Phone, Amount, Time) dikhata hai aur user ko 'View Existing Order' ya 'Proceed Anyway (Override)' ke option deta hai."
+> "Untracked parcel abhi dispatched hi nahi hua hota, is liye us par Delivered mark karna business rules ke against hai. Humne 2-Layer validation implement ki hai:  
+> 1. Frontend layer per untracked parcels par status update attempt karte hi Toast Alert `⚠️ Tracking Required: Please assign a Tracking Number & Courier first` show hota hai.  
+> 2. Backend service layer (`OrderService.updateOrder`) DB update query block karke HTTP 400 Bad Request throw karti hai. Yeh rule COD aur NON-COD dono parcel types par equal apply hota hai."
 
 ---
 
-### ❓ Q2: "Parcel Delivery Status aur COD Payment Collection ka kya workflow hai?"
+### ❓ Q2: "HTTP 409 Conflict error aane par screen par Duplicate Entry Warning kaise show hoti hai?"
 > **💬 Ideal Answer (Technical Response):**  
-> "Parcel ka lifecycle 2 distinct tracks par chalta hai:  
-> 1. **Parcel Status:** `Pending` $\rightarrow$ `Shipped` $\rightarrow$ `Delivered` / `Returned` (1-click direct row actions par).  
-> 2. **COD Payment Status:** `Pending` $\rightarrow$ `Received` (1-click Receive action se update hota hai)."
+> "Jab same customer phone aur total amount ka order pichle 15 minutes mein submit hota hai, to backend HTTP 409 Conflict return karta hai. React Mutation handler `DuplicateWarningModal` component trigger karta hai jo previous order details ke sath 'View Existing Order' ya 'Proceed Anyway' options show karta hai."
 
 ---
 
 ### ❓ Q3: "Search Bar performance ko optimize karne ke liye aap ne kya pattern use kiya?"
 > **💬 Ideal Answer (Technical Response):**  
-> "Humne `useDebounce` custom hook Implement kiya with 300ms delay window. User interface input control instantly type-responsive rehta hai, lekin array filtering aur search evaluation srif typing stop hone ke 300ms baad execute hoti hai."
+> "Humne `useDebounce` custom hook Implement kiya with 300ms delay window, jis se single-character typing lag bilkul eliminate ho jata hai."
 
 ---
 
