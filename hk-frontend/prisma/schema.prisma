@@ -8,6 +8,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  passwordHash String
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions     Session[]
+}
+
+model Session {
+  id               String   @id @default(uuid())
+  sessionTokenHash String   @unique
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+}
+
 model StaffMember {
   id        String   @id @default(uuid())
   name      String
@@ -30,6 +50,10 @@ model Customer {
   updatedAt      DateTime @updatedAt
 
   orders         Order[]
+
+  @@index([name])
+  @@index([phone])
+  @@index([alternatePhone])
 }
 
 model Order {
@@ -55,6 +79,12 @@ model Order {
   trackingEntries  TrackingEntry[]
   labels           ParcelLabel[]
   codPayments      CodPayment[]
+
+  @@index([orderType])
+  @@index([orderType, createdAt])
+  @@index([status])
+  @@index([codStatus])
+  @@index([createdAt])
 }
 
 model OrderItem {
@@ -77,12 +107,14 @@ model TrackingEntry {
   trackingDate   DateTime @default(now())
   receiptUrl     String?
   createdAt      DateTime @default(now())
+
+  @@index([orderId])
 }
 
 model ParcelLabel {
   id        String   @id @default(uuid())
   orderId   String
-  order     Order    @relation(fields: [orderId], references: [id])
+  order       Order    @relation(fields: [orderId], references: [id])
   printedAt DateTime @default(now())
   printedBy String?
 }
@@ -137,4 +169,12 @@ model Setting {
   shopLogo  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model IdempotencyRecord {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  response   String
+  statusCode Int      @default(200)
+  createdAt  DateTime @default(now())
 }

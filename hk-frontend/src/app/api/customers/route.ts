@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import { CustomerService } from '@/services/customer.service';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Call Service
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const customers = await CustomerService.getCustomers();
-    
     return NextResponse.json(customers);
   } catch (error) {
     console.error('Error fetching customers:', error);
@@ -17,9 +21,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const data = await request.json();
-    
-    // Call Service
     const customer = await CustomerService.upsertCustomer(data);
 
     return NextResponse.json(customer, { status: 201 });

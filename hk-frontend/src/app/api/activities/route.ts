@@ -1,16 +1,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const activities = await prisma.activity.findMany({
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
 
-    // Format for frontend
     const formatted = activities.map(act => ({
       id: act.id,
       date: new Date(act.createdAt).toISOString().split('T')[0],

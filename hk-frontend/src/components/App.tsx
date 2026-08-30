@@ -1,13 +1,13 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { memo, useState, useEffect, useRef } from "react";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import type { ReactNode, InputHTMLAttributes, SelectHTMLAttributes, ElementType } from "react";
 import {
   LayoutDashboard, Plus, Package, Truck, Banknote, Receipt,
   BarChart2, ClipboardList, Settings, Search, Bell, Menu, X,
   Eye, Edit2, Printer, Ban, CheckCircle2, Clock, AlertTriangle,
   TrendingUp, Upload, Download, User, Save, ArrowLeft, Check,
-  AlertCircle, ChevronRight, Layers, XCircle,
+  AlertCircle, ChevronRight, Layers, XCircle, Calendar, LogOut
 } from "lucide-react";
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -19,6 +19,7 @@ import Tesseract from "tesseract.js";
 
 type Screen =
   | "dashboard" | "create-order" | "orders" | "order-detail"
+  | "cod-parcels" | "non-cod-parcels" | "daily-history"
   | "tracking" | "cod" | "settlements" | "reports"
   | "activity-log" | "settings" | "daily-closing";
 
@@ -27,17 +28,31 @@ type CODStatus = "pending" | "received";
 
 interface Product { name: string; qty: number; price: number }
 interface Order {
+  _id?: string;
   id: string; customer: string; whatsapp: string; city: string;
   address: string; amount: number; handledBy: "Sami" | "Abid";
   status: OrderStatus; codStatus: CODStatus; date: string;
   courier?: string; trackingNo?: string; trackingNo2?: string; products: Product[];
   notes?: string; type: "COD" | "NON-COD";
   province?: string;
+  altPhone?: string;
   deliveryCharges?: number;
   receivedDate?: string;
   receiptUrl?: string;
   advancePayment?: number;
   paymentType?: "Online" | "Courier";
+}
+
+// ─── Debounce Custom Hook ──────────────────────────────────────────────────────
+function useDebounce<T>(value: T, delay: number = 300): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
 }
 
 // ─── Mock Data & Constants ──────────────────────────────────────────────────────
@@ -52,85 +67,8 @@ const PROVINCE_CITIES: Record<string, string[]> = {
 };
 const PROVINCES = Object.keys(PROVINCE_CITIES);
 
-const MOCK_ORDERS: Order[] = [
-  {
-    id: "HKF-2026-000147", customer: "Ali Raza", whatsapp: "03001234567",
-    city: "Lahore", address: "House 45, Block C, Gulberg III, Lahore",
-    amount: 6200, handledBy: "Sami", status: "shipped", codStatus: "pending",
-    date: "2026-06-20", courier: "TCS", trackingNo: "TCS123456789",
-    products: [{ name: "King Size Bedsheet Set", qty: 1, price: 4500 }, { name: "Pillow Covers (2pc)", qty: 1, price: 1700 }],
-    type: "COD",
-  },
-  {
-    id: "HKF-2026-000146", customer: "Ayesha Khan", whatsapp: "03211234567",
-    city: "Karachi", address: "Flat 12, Block 4, Clifton, Karachi",
-    amount: 3800, handledBy: "Abid", status: "delivered", codStatus: "received",
-    date: "2026-06-20", courier: "PostEx", trackingNo: "PEX789012345",
-    products: [{ name: "Double Bedsheet", qty: 2, price: 1900 }],
-    type: "COD",
-  },
-  {
-    id: "HKF-2026-000145", customer: "Muhammad Usman", whatsapp: "03451234567",
-    city: "Islamabad", address: "Street 3, F-7/2, Islamabad",
-    amount: 9400, handledBy: "Sami", status: "processing", codStatus: "pending",
-    date: "2026-06-20",
-    products: [{ name: "Luxury Comforter Set", qty: 1, price: 7800 }, { name: "Mattress Protector", qty: 1, price: 1600 }],
-    type: "COD",
-  },
-  {
-    id: "HKF-2026-000144", customer: "Sara Malik", whatsapp: "03121234567",
-    city: "Faisalabad", address: "Mohallah Gulshan, D-Ground, Faisalabad",
-    amount: 4200, handledBy: "Abid", status: "shipped", codStatus: "pending",
-    date: "2026-06-19", courier: "Leopard", trackingNo: "LEP345678901",
-    products: [{ name: "Single Bedsheet Set", qty: 2, price: 2100 }],
-    type: "COD",
-  },
-  {
-    id: "HKF-2026-000143", customer: "Bilal Ahmed", whatsapp: "03331234567",
-    city: "Rawalpindi", address: "Sector G-9/2, Rawalpindi",
-    amount: 5600, handledBy: "Sami", status: "delivered", codStatus: "pending",
-    date: "2026-06-19", courier: "M&P", trackingNo: "MNP901234567",
-    products: [{ name: "Embroidered Bedsheet Set", qty: 1, price: 5600 }],
-    type: "COD",
-  },
-  {
-    id: "HKF-2026-000142", customer: "Fatima Noor", whatsapp: "03051234567",
-    city: "Multan", address: "Hussain Agahi Road, Multan",
-    amount: 7100, handledBy: "Abid", status: "delivered", codStatus: "received",
-    date: "2026-06-18", courier: "TCS", trackingNo: "TCS567890123",
-    products: [{ name: "Queen Bedsheet Set", qty: 1, price: 5200 }, { name: "Towel Set (4pc)", qty: 1, price: 1900 }],
-    type: "COD",
-  },
-  {
-    id: "HKF-2026-000141", customer: "Hassan Ali", whatsapp: "03701234567",
-    city: "Peshawar", address: "Hayatabad Phase 4, Sector E3, Peshawar",
-    amount: 3200, handledBy: "Sami", status: "void", codStatus: "pending",
-    date: "2026-06-18",
-    products: [{ name: "Single Bedsheet", qty: 2, price: 1600 }],
-    type: "COD",
-  },
-  {
-    id: "HKF-2026-000140", customer: "Zainab Shah", whatsapp: "03061234567",
-    city: "Lahore", address: "DHA Phase 5, Block L, Lahore",
-    amount: 12500, handledBy: "Abid", status: "delivered", codStatus: "received",
-    date: "2026-06-17", courier: "PostEx", trackingNo: "PEX234567890",
-    products: [{ name: "Luxury Bedsheet Set (King)", qty: 2, price: 6250 }],
-    type: "COD",
-  },
-];
-
-const ACTIVITY_DATA = [
-  { id: 1, date: "2026-06-20", time: "11:47 AM", action: "Print Label", order: "HKF-2026-000147", by: "Sami" },
-  { id: 2, date: "2026-06-20", time: "11:45 AM", action: "Create Order", order: "HKF-2026-000147", by: "Sami" },
-  { id: 3, date: "2026-06-20", time: "10:30 AM", action: "Create Order", order: "HKF-2026-000146", by: "Abid" },
-  { id: 4, date: "2026-06-20", time: "09:15 AM", action: "COD Received", order: "HKF-2026-000142", by: "Sami" },
-  { id: 5, date: "2026-06-19", time: "04:20 PM", action: "Tracking Added", order: "HKF-2026-000144", by: "Abid" },
-  { id: 6, date: "2026-06-19", time: "03:10 PM", action: "Create Order", order: "HKF-2026-000143", by: "Sami" },
-  { id: 7, date: "2026-06-19", time: "02:45 PM", action: "Void Order", order: "HKF-2026-000141", by: "Sami" },
-  { id: 8, date: "2026-06-18", time: "05:00 PM", action: "COD Received", order: "HKF-2026-000140", by: "Abid" },
-  { id: 9, date: "2026-06-18", time: "01:30 PM", action: "Tracking Added", order: "HKF-2026-000143", by: "Abid" },
-  { id: 10, date: "2026-06-17", time: "11:00 AM", action: "Create Order", order: "HKF-2026-000140", by: "Abid" },
-];
+const MOCK_ORDERS: Order[] = [];
+const ACTIVITY_DATA: any[] = [];
 
 const WEEKLY_DATA = [
   { day: "Mon", orders: 12, revenue: 68400, cod: 45000 },
@@ -150,6 +88,16 @@ function cn(...args: (string | boolean | undefined | null)[]): string {
 
 function formatPKR(n: number): string {
   return `Rs ${n.toLocaleString("en-PK")}`;
+}
+
+async function safeResponseJson(res: Response) {
+  try {
+    const text = await res.text();
+    if (!text || !text.trim()) return null;
+    return JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
 }
 
 // ─── Shared Components ─────────────────────────────────────────────────────────
@@ -287,12 +235,14 @@ function StatCard({ label, value, sub, color, icon: Icon, priority = "secondary"
 
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "create-order", label: "Create Order", icon: Plus },
-  { id: "orders", label: "Orders", icon: Package },
+  { id: "create-order", label: "Create Parcel", icon: Plus },
+  { id: "cod-parcels", label: "COD Parcels", icon: Banknote },
+  { id: "non-cod-parcels", label: "Non-COD Parcels", icon: Package },
+  { id: "orders", label: "All Parcels", icon: Layers },
   { id: "tracking", label: "Tracking", icon: Truck },
-  { id: "cod", label: "COD", icon: Banknote },
-  { id: "settlements", label: "Settlements", icon: Receipt },
-  { id: "reports", label: "Reports", icon: BarChart2 },
+  { id: "cod", label: "COD Receiving", icon: Receipt },
+  { id: "settlements", label: "Settlements", icon: BarChart2 },
+  { id: "reports", label: "Reports", icon: ClipboardList },
   { id: "daily-closing", label: "Daily Closing", icon: Clock },
   { id: "activity-log", label: "Activity Log", icon: ClipboardList },
   { id: "settings", label: "Settings", icon: Settings },
@@ -371,10 +321,16 @@ function Sidebar({ screen, setScreen, open, onClose }: {
     </>
   );
 }
+const SidebarMemo = memo(Sidebar);
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
-function Header({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSearchClick: () => void }) {
+function Header({ onMenuClick, onSearchClick, onLogout, user }: { 
+  onMenuClick: () => void; 
+  onSearchClick: () => void; 
+  onLogout: () => void;
+  user: any;
+}) {
   const [time, setTime] = useState<Date | null>(null);
   useEffect(() => {
     setTime(new Date());
@@ -384,6 +340,26 @@ function Header({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSea
 
   const dateStr = time ? time.toLocaleDateString("en-PK", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : "";
   const timeStr = time ? time.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handlePrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handlePrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handlePrompt);
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice.outcome === 'accepted') {
+      setInstallPrompt(null);
+    }
+  };
 
   return (
     <header className="bg-white border-b border-slate-100 px-4 lg:px-6 py-3 flex items-center gap-4 flex-shrink-0 z-30 sticky top-0 print:hidden">
@@ -409,6 +385,16 @@ function Header({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSea
       </button>
 
       <div className="ml-auto flex items-center gap-3">
+        {installPrompt && (
+          <button
+            onClick={handleInstallApp}
+            className="flex items-center gap-1.5 text-[11px] font-bold bg-[#0F172A] text-white hover:bg-[#1E293B] px-3 py-1.5 rounded-md transition-all shadow-sm ring-1 ring-white/10"
+            title="Install HK Fabric as Desktop/Mobile PWA App"
+          >
+            <Download size={14} className="text-[#D4AF37]" />
+            <span className="hidden sm:inline">Install PWA App</span>
+          </button>
+        )}
         <div className="hidden md:flex items-center gap-2 mr-2">
           <a 
             href="https://postextracking.com.pk/" 
@@ -431,14 +417,28 @@ function Header({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSea
           <span className="text-[11px] text-slate-400 leading-none">{dateStr}</span>
           <span className="text-sm font-mono font-semibold text-[#0F172A] mt-0.5 leading-none">{timeStr}</span>
         </div>
-        <button className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors">
-          <Bell size={18} className="text-slate-500" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
-        </button>
+
+        {user && (
+          <div className="flex items-center gap-2 border-l border-slate-100 pl-3">
+            <div className="text-right hidden sm:block">
+              <div className="text-xs font-bold text-[#0F172A]">{user.username}</div>
+              <div className="text-[10px] text-slate-400">Authenticated</div>
+            </div>
+            <button
+              onClick={onLogout}
+              title="Logout"
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-semibold transition-colors shadow-sm border border-red-200"
+            >
+              <LogOut size={14} />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );
 }
+const HeaderMemo = memo(Header);
 
 // ─── Global Search ─────────────────────────────────────────────────────────────
 
@@ -448,18 +448,19 @@ function GlobalSearch({ open, onClose, setScreen, setSelectedOrderId, orders }: 
   orders: Order[];
 }) {
   const [q, setQ] = useState("");
+  const debouncedQ = useDebounce(q, 300);
   
-  const matchingCustomers = q.length > 1
-    ? orders.filter(o => o.customer.toLowerCase().includes(q.toLowerCase()) || o.whatsapp.includes(q))
+  const matchingCustomers = debouncedQ.length > 1
+    ? orders.filter(o => o.customer.toLowerCase().includes(debouncedQ.toLowerCase()) || o.whatsapp.includes(debouncedQ) || o.address?.toLowerCase().includes(debouncedQ.toLowerCase()) || o.city?.toLowerCase().includes(debouncedQ.toLowerCase()))
     : [];
-  const matchingOrders = q.length > 1
-    ? orders.filter(o => o.id.toLowerCase().includes(q.toLowerCase()))
+  const matchingOrders = debouncedQ.length > 1
+    ? orders.filter(o => o.id.toLowerCase().includes(debouncedQ.toLowerCase()))
     : [];
-  const matchingTracking = q.length > 1
-    ? orders.filter(o => o.trackingNo?.toLowerCase().includes(q.toLowerCase()))
+  const matchingTracking = debouncedQ.length > 1
+    ? orders.filter(o => o.trackingNo?.toLowerCase().includes(debouncedQ.toLowerCase()))
     : [];
-  const matchingCOD = q.length > 1
-    ? orders.filter(o => o.type === "COD" && (o.id.toLowerCase().includes(q.toLowerCase()) || o.customer.toLowerCase().includes(q.toLowerCase())))
+  const matchingCOD = debouncedQ.length > 1
+    ? orders.filter(o => o.type === "COD" && (o.id.toLowerCase().includes(debouncedQ.toLowerCase()) || o.customer.toLowerCase().includes(debouncedQ.toLowerCase()) || o.whatsapp.includes(debouncedQ)))
     : [];
 
   const hasResults = matchingCustomers.length > 0 || matchingOrders.length > 0 || matchingTracking.length > 0 || matchingCOD.length > 0;
@@ -576,198 +577,892 @@ function GlobalSearch({ open, onClose, setScreen, setSelectedOrderId, orders }: 
 
 // ─── Dashboard Screen ─────────────────────────────────────────────────────────
 
+// ─── Duplicate Order Warning Modal ─────────────────────────────────────────────
+
+function DuplicateWarningModal({
+  open,
+  data,
+  onClose,
+  onViewExisting,
+}: {
+  open: boolean;
+  data: { existingOrder: any; message: string } | null;
+  onClose: () => void;
+  onViewExisting: (id: string) => void;
+}) {
+  if (!open || !data) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-white rounded-2xl shadow-2xl border border-rose-200 max-w-md w-full overflow-hidden animate-scaleIn">
+        {/* Header */}
+        <div className="bg-rose-600 px-6 py-4 text-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={24} className="text-amber-300 animate-bounce flex-shrink-0" />
+            <div>
+              <h3 className="font-bold text-base">Duplicate Entry Warning</h3>
+              <p className="text-xs text-rose-100">Same customer & amount within 15 mins</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-rose-700 text-rose-100 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-4">
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-800 flex items-center gap-2">
+            <AlertCircle size={16} className="text-rose-600 flex-shrink-0" />
+            <span>{data.message}</span>
+          </div>
+
+          {data.existingOrder && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 text-xs">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Existing Order Details</div>
+              <div className="flex justify-between font-mono font-bold text-slate-800">
+                <span className="text-slate-500">Order No:</span>
+                <span className="text-indigo-600 font-bold">{data.existingOrder.orderNo || data.existingOrder.id}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span className="text-slate-500">Customer:</span>
+                <span className="font-semibold text-slate-900">{data.existingOrder.customerName || data.existingOrder.customer?.name || "Customer"}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span className="text-slate-500">WhatsApp:</span>
+                <span className="font-mono">{data.existingOrder.phone || data.existingOrder.customer?.phone}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span className="text-slate-500">Total Amount:</span>
+                <span className="font-mono font-bold text-emerald-700">{formatPKR(data.existingOrder.totalAmount || data.existingOrder.amount || 0)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span className="text-slate-500">Status:</span>
+                <span className="capitalize font-semibold text-slate-800">{data.existingOrder.status}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            Cancel / Close
+          </button>
+          {data.existingOrder && (
+            <button
+              onClick={() => {
+                onClose();
+                onViewExisting(data.existingOrder.orderNo || data.existingOrder.id);
+              }}
+              className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+            >
+              <Eye size={14} /> View Existing Order
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DashboardScreen({ setScreen, onViewOrder, orders }: {
   setScreen: (s: Screen) => void;
   onViewOrder: (id: string) => void;
   orders: Order[];
 }) {
-  const todayOrders = orders.filter(o => o.date === "2026-06-20");
+  const { data: stats } = useQuery({
+    queryKey: ['stats'],
+    queryFn: async () => {
+      const res = await fetch('/api/stats');
+      if (!res.ok) return null;
+      return safeResponseJson(res);
+    }
+  });
+
+  const codCount = stats?.cod?.count ?? orders.filter(o => o.type === "COD" && o.status !== "void").length;
+  const codSales = stats?.cod?.sales ?? orders.filter(o => o.type === "COD" && o.status !== "void").reduce((a, b) => a + b.amount, 0);
+  const pendingCOD = stats?.cod?.pendingAmount ?? orders.filter(o => o.type === "COD" && o.codStatus === "pending" && o.status !== "void").reduce((a, b) => a + b.amount, 0);
+  const receivedCOD = stats?.cod?.receivedAmount ?? orders.filter(o => o.type === "COD" && o.codStatus === "received").reduce((a, b) => a + b.amount, 0);
+
+  const nonCodCount = stats?.nonCod?.count ?? orders.filter(o => o.type === "NON-COD" && o.status !== "void").length;
+  const nonCodSales = stats?.nonCod?.sales ?? orders.filter(o => o.type === "NON-COD" && o.status !== "void").reduce((a, b) => a + b.amount, 0);
+
+  const totalCount = stats?.overall?.totalCount ?? (codCount + nonCodCount);
+  const totalSales = stats?.overall?.totalSales ?? (codSales + nonCodSales);
+
   const pendingTracking = orders.filter(o => !o.trackingNo && o.status !== "void").length;
-  const pendingCOD = orders.filter(o => o.codStatus === "pending" && o.status === "delivered").length;
-  const receivedCOD = orders.filter(o => o.codStatus === "received").reduce((a, b) => a + b.amount, 0);
-  const todayRevenue = todayOrders.reduce((a, b) => a + b.amount, 0);
-  const voidOrders = orders.filter(o => o.status === "void").length;
-  const hasPendingSettlements = false; // Set to false since settlements are handled synchronously
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-xl font-bold text-[#0F172A]">System Dashboard</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Authoritative metrics & live parcel statistics</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Btn size="sm" onClick={() => setScreen("cod-parcels")} variant="secondary">
+            <Banknote size={14} className="text-emerald-600" /> COD Parcels ({codCount})
+          </Btn>
+          <Btn size="sm" onClick={() => setScreen("non-cod-parcels")} variant="secondary">
+            <Package size={14} className="text-indigo-600" /> Non-COD Parcels ({nonCodCount})
+          </Btn>
+        </div>
+      </div>
+
+      {/* Overall Total Metrics Banner */}
+      <div className="bg-[#0F172A] text-white rounded-xl p-5 shadow-sm border border-slate-800">
+        <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Overall System Totals</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono">
+          <div>
+            <span className="text-xs text-slate-400 block">Total Parcels</span>
+            <span className="text-2xl font-bold text-white">{totalCount}</span>
+          </div>
+          <div>
+            <span className="text-xs text-slate-400 block">Total Sales Revenue</span>
+            <span className="text-2xl font-bold text-[#D4AF37]">{formatPKR(totalSales)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Separated COD vs Non-COD Operational Sections */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* COD Block */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h2 className="font-bold text-slate-900 flex items-center gap-2 text-sm">
+              <Banknote size={18} className="text-emerald-600" /> COD Parcels & Sales
+            </h2>
+            <button onClick={() => setScreen("cod-parcels")} className="text-xs font-semibold text-emerald-700 hover:underline">
+              Open COD Section →
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 font-mono">
+            <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
+              <span className="text-[11px] text-slate-500 font-sans block">COD Parcels</span>
+              <span className="text-xl font-bold text-slate-900">{codCount}</span>
+            </div>
+            <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
+              <span className="text-[11px] text-slate-500 font-sans block">COD Total Sales</span>
+              <span className="text-xl font-bold text-emerald-700">{formatPKR(codSales)}</span>
+            </div>
+            <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100">
+              <span className="text-[11px] text-slate-500 font-sans block">Pending COD</span>
+              <span className="text-base font-bold text-amber-700">{formatPKR(pendingCOD)}</span>
+            </div>
+            <div className="p-3 bg-teal-50/50 rounded-lg border border-teal-100">
+              <span className="text-[11px] text-slate-500 font-sans block">Received COD</span>
+              <span className="text-base font-bold text-teal-700">{formatPKR(receivedCOD)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Non-COD Block */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h2 className="font-bold text-slate-900 flex items-center gap-2 text-sm">
+              <Package size={18} className="text-indigo-600" /> Non-COD Parcels & Sales
+            </h2>
+            <button onClick={() => setScreen("non-cod-parcels")} className="text-xs font-semibold text-indigo-700 hover:underline">
+              Open Non-COD Section →
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 font-mono">
+            <div className="p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
+              <span className="text-[11px] text-slate-500 font-sans block">Non-COD Parcels</span>
+              <span className="text-xl font-bold text-slate-900">{nonCodCount}</span>
+            </div>
+            <div className="p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
+              <span className="text-[11px] text-slate-500 font-sans block">Non-COD Total Sales</span>
+              <span className="text-xl font-bold text-indigo-700">{formatPKR(nonCodSales)}</span>
+            </div>
+          </div>
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-500 font-sans">
+            Prepaid orders via Online transfer or direct courier payment.
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions & Recent Orders */}
+      <div className="flex flex-wrap gap-2">
+        <Btn onClick={() => setScreen("create-order")}><Plus size={14} /> New Parcel</Btn>
+        <Btn variant="secondary" onClick={() => setScreen("cod-parcels")}><Banknote size={14} /> COD Section</Btn>
+        <Btn variant="secondary" onClick={() => setScreen("non-cod-parcels")}><Package size={14} /> Non-COD Section</Btn>
+        <Btn variant="secondary" onClick={() => setScreen("tracking")}><Truck size={14} /> Add Tracking</Btn>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <h2 className="text-sm font-semibold text-[#0F172A]">Recent Parcels</h2>
+          <button onClick={() => setScreen("orders")} className="text-sm text-slate-500 hover:text-[#0F172A] font-medium transition-colors">View all →</button>
+        </div>
+        <div className="overflow-x-auto flex-1 scrollbar-hide">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
+              <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="text-left px-6 py-3 whitespace-nowrap">Order ID</th>
+                <th className="text-left px-6 py-3">Customer</th>
+                <th className="text-left px-6 py-3">Type</th>
+                <th className="text-right px-6 py-3">Amount</th>
+                <th className="text-left px-6 py-3">Agent</th>
+                <th className="text-left px-6 py-3">Status</th>
+                <th className="text-left px-6 py-3">Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {orders.slice(0, 6).map(o => (
+                <tr key={o.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => onViewOrder(o.id)}>
+                  <td className="px-6 py-4 font-mono text-xs font-medium text-slate-900 group-hover:text-[#0F172A]">{o.id}</td>
+                  <td className="px-6 py-4">
+                    <div className="font-medium text-sm text-slate-900">{o.customer}</div>
+                    <div className="text-xs text-slate-500">{o.city}</div>
+                  </td>
+                  <td className="px-6 py-4 font-mono text-xs">
+                    <span className={cn("px-2 py-0.5 rounded font-bold text-[10px]", o.type === "COD" ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-700")}>
+                      {o.type}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(o.amount)}</td>
+                  <td className="px-6 py-4">
+                    <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-medium tracking-wide",
+                      o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
+                    )}>{o.handledBy}</span>
+                  </td>
+                  <td className="px-6 py-4"><StatusBadge status={o.status} /></td>
+                  <td className="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{o.date}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── COD Parcels Screen ────────────────────────────────────────────────────────
+
+function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, onUpdateStatus, onReceiveCOD }: {
+  setScreen: (s: Screen) => void;
+  onViewOrder: (id: string) => void;
+  onEditOrder: (id: string) => void;
+  onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
+  onUpdateStatus?: (id: string, status: OrderStatus) => void;
+  onReceiveCOD?: (id: string, date: string) => void;
+}) {
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [codStatusFilter, setCodStatusFilter] = useState<string>("all");
+  const [courierFilter, setCourierFilter] = useState<string>("all");
+  const [trackingStateFilter, setTrackingStateFilter] = useState<"all" | "awaiting" | "tracked">("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  const { data: codOrders = [], isLoading } = useQuery({
+    queryKey: ['orders', 'COD', statusFilter, codStatusFilter],
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+    refetchOnMount: true,
+    queryFn: async () => {
+      const params = new URLSearchParams({ orderType: 'COD' });
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (codStatusFilter !== 'all') params.append('codStatus', codStatusFilter);
+      const res = await fetch(`/api/orders?${params.toString()}`);
+      const raw = (await safeResponseJson(res));
+      const data = Array.isArray(raw) ? raw : (raw?.orders || []);
+      return data.map((o: any) => ({
+        _id: o.id,
+        id: o.orderNo,
+        customer: o.customer?.name || "Unknown",
+        whatsapp: o.customer?.phone || "",
+        altPhone: o.customer?.alternatePhone || "",
+        city: o.customer?.city || "",
+        address: o.customer?.address || "",
+        amount: o.totalAmount,
+        handledBy: o.handledBy,
+        status: o.status.toLowerCase(),
+        codStatus: o.codStatus.toLowerCase(),
+        date: new Date(o.createdAt).toISOString().split('T')[0],
+        courier: o.trackingEntries?.[0]?.courierName,
+        trackingNo: o.trackingEntries?.[0]?.trackingNumber,
+        products: o.items?.map((i: any) => ({ name: i.productName, qty: i.qty, price: i.unitPrice })) || [],
+        type: o.orderType,
+        notes: o.notes,
+        paymentType: o.paymentType || "Courier",
+        deliveryCharges: o.deliveryCharges || 0,
+        advancePayment: o.advancePayment || 0,
+      }));
+    }
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ['stats'],
+    queryFn: async () => {
+      const res = await fetch('/api/stats');
+      if (!res.ok) return null;
+      return safeResponseJson(res);
+    }
+  });
+
+  const awaitingCount = codOrders.filter((o: any) => !o.trackingNo).length;
+  const trackedCount = codOrders.filter((o: any) => !!o.trackingNo).length;
+
+  const filtered = codOrders.filter((o: any) => {
+    if (trackingStateFilter === 'awaiting' && o.trackingNo) return false;
+    if (trackingStateFilter === 'tracked' && !o.trackingNo) return false;
+    if (courierFilter !== 'all' && o.courier?.toLowerCase() !== courierFilter.toLowerCase()) return false;
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase();
+      const matchNo = o.id.toLowerCase().includes(q);
+      const matchCust = o.customer.toLowerCase().includes(q);
+      const matchPhone = o.whatsapp.includes(q);
+      const matchTrack = o.trackingNo?.toLowerCase().includes(q);
+      const matchCity = o.city?.toLowerCase().includes(q);
+      const matchAddress = o.address?.toLowerCase().includes(q);
+      if (!matchNo && !matchCust && !matchPhone && !matchTrack && !matchCity && !matchAddress) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-[#0F172A]">Dashboard</h1>
-        <p className="text-sm text-slate-400 mt-0.5">Friday, 20 June 2026</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-[#0F172A] flex items-center gap-2">
+            <Banknote className="text-emerald-600" size={22} />
+            COD Parcels
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">Dedicated Cash-on-Delivery operations & tracking</p>
+        </div>
+        <button
+          onClick={() => setScreen("create-order")}
+          className="flex items-center gap-1.5 px-4 py-2 bg-[#0F172A] hover:bg-slate-800 text-white font-bold text-xs rounded-lg shadow-sm transition-all"
+        >
+          <Plus size={14} /> New COD Parcel
+        </button>
       </div>
 
-      {/* Alert banners */}
-      {(pendingTracking > 0 || pendingCOD > 0 || hasPendingSettlements) && (
-        <div className="flex flex-col sm:flex-row gap-2">
-          {pendingTracking > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex-1">
-              <AlertTriangle size={15} className="text-amber-600 flex-shrink-0" />
-              <span className="text-sm text-amber-700 flex-1">
-                <strong>{pendingTracking} orders</strong> awaiting tracking
-              </span>
-              <button onClick={() => setScreen("tracking")} className="text-xs font-semibold text-amber-700 hover:underline whitespace-nowrap">
-                Add now →
-              </button>
-            </div>
-          )}
-          {pendingCOD > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex-1">
-              <Clock size={15} className="text-blue-600 flex-shrink-0" />
-              <span className="text-sm text-blue-700 flex-1">
-                <strong>{pendingCOD} orders</strong> COD not received
-              </span>
-              <button onClick={() => setScreen("cod")} className="text-xs font-semibold text-blue-700 hover:underline whitespace-nowrap">
-                View →
-              </button>
-            </div>
-          )}
-          {hasPendingSettlements && (
-            <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg flex-1">
-              <AlertCircle size={15} className="text-red-600 flex-shrink-0" />
-              <span className="text-sm text-red-700 flex-1">
-                <strong>Settlement Waiting</strong> for approval
-              </span>
-              <button onClick={() => setScreen("settlements")} className="text-xs font-semibold text-red-700 hover:underline whitespace-nowrap">
-                Review →
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Stat cards - Visual Hierarchy Implemented */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-        <div className="col-span-1 md:col-span-6 lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <StatCard label="Today's Revenue" value={formatPKR(todayRevenue)} sub={`From ${todayOrders.length} orders today`} color="bg-white text-indigo-600" icon={TrendingUp} priority="primary" />
-          <StatCard label="Received COD" value={formatPKR(receivedCOD)} sub="Successfully collected this week" color="bg-white text-emerald-600" icon={CheckCircle2} priority="primary" />
-        </div>
-        <div className="col-span-1 md:col-span-6 lg:col-span-4 grid grid-cols-2 gap-4">
-          <StatCard label="Today's Orders" value={todayOrders.length} sub="As of now" color="bg-white text-blue-600" icon={Package} />
-          <StatCard label="Pending Tracking" value={pendingTracking} sub="Without tracking" color="bg-white text-amber-600" icon={Clock} />
-          <StatCard label="Pending COD" value={pendingCOD} sub="Delivered, unpaid" color="bg-white text-orange-600" icon={AlertCircle} />
-          <StatCard label="Void Orders" value={voidOrders} sub="All time" icon={Ban} priority="tertiary" />
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatCard
+          label="COD Parcels"
+          value={stats?.cod?.count ?? filtered.length}
+          sub="Total Cash-on-Delivery"
+          icon={Package}
+          color="bg-emerald-50 text-emerald-700"
+        />
+        <StatCard
+          label="COD Sales"
+          value={formatPKR(stats?.cod?.sales ?? 0)}
+          sub="Total COD Order Value"
+          icon={TrendingUp}
+          color="bg-indigo-50 text-indigo-700"
+        />
+        <StatCard
+          label="Pending COD"
+          value={formatPKR(stats?.cod?.pendingAmount ?? 0)}
+          sub="Awaiting Settlement"
+          icon={Clock}
+          color="bg-amber-50 text-amber-700"
+        />
+        <StatCard
+          label="Received COD"
+          value={formatPKR(stats?.cod?.receivedAmount ?? 0)}
+          sub="Settled & Received"
+          icon={CheckCircle2}
+          color="bg-teal-50 text-teal-700"
+        />
       </div>
 
-      {/* Quick actions */}
-      <div className="flex flex-wrap gap-2">
-        <Btn onClick={() => setScreen("create-order")}><Plus size={14} /> New Order</Btn>
-        <Btn variant="secondary" onClick={() => setScreen("tracking")}><Truck size={14} /> Add Tracking</Btn>
-        <Btn variant="secondary" className="hover:bg-slate-800 hover:text-white" onClick={() => setScreen("cod")}><Banknote size={14} /> Receive COD</Btn>
+      <div className="flex gap-1.5 p-1 bg-slate-100 rounded-lg w-fit border border-slate-200/60 flex-wrap">
+        <button
+          onClick={() => setTrackingStateFilter("all")}
+          className={cn(
+            "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+            trackingStateFilter === "all" ? "bg-white text-[#0F172A] font-bold shadow-sm" : "text-slate-500 hover:text-slate-800"
+          )}
+        >
+          All COD ({codOrders.length})
+        </button>
+        <button
+          onClick={() => setTrackingStateFilter("awaiting")}
+          className={cn(
+            "px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5",
+            trackingStateFilter === "awaiting" ? "bg-amber-500 text-white shadow-sm" : "text-amber-700 bg-amber-50/70 hover:bg-amber-100"
+          )}
+        >
+          <Clock size={13} /> Awaiting Tracking ({awaitingCount})
+        </button>
+        <button
+          onClick={() => setTrackingStateFilter("tracked")}
+          className={cn(
+            "px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5",
+            trackingStateFilter === "tracked" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
+          )}
+        >
+          <Truck size={13} /> Tracked / Shipped ({trackedCount})
+        </button>
       </div>
 
-      <div className="flex flex-col gap-6">
-        {/* Recent Orders */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
-            <h2 className="text-sm font-semibold text-[#0F172A]">Recent Orders</h2>
-            <button onClick={() => setScreen("orders")} className="text-sm text-slate-500 hover:text-[#0F172A] font-medium transition-colors">View all →</button>
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex flex-wrap gap-2 items-center flex-1 min-w-[280px]">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search COD order, customer, phone, tracking..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0F172A]"
+            />
           </div>
-          <div className="overflow-x-auto flex-1 scrollbar-hide">
-            <table className="w-full text-sm min-w-[600px]">
-              <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
-                <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  <th className="text-left px-6 py-3 whitespace-nowrap">Order ID</th>
-                  <th className="text-left px-6 py-3">Customer</th>
-                  <th className="text-right px-6 py-3">Amount</th>
-                  <th className="text-left px-6 py-3">Agent</th>
-                  <th className="text-left px-6 py-3">Status</th>
-                  <th className="text-left px-6 py-3">Date</th>
+
+          <FieldSelect
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="text-xs py-1.5 w-auto"
+          >
+            <option value="all">All Parcel Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="shipped">Shipped</option>
+            <option value="delivered">Delivered</option>
+            <option value="returned">Returned</option>
+            <option value="void">Void</option>
+          </FieldSelect>
+
+          <FieldSelect
+            value={codStatusFilter}
+            onChange={e => setCodStatusFilter(e.target.value)}
+            className="text-xs py-1.5 w-auto font-bold text-amber-700"
+          >
+            <option value="all">All COD Statuses</option>
+            <option value="pending">COD Pending</option>
+            <option value="received">COD Received</option>
+          </FieldSelect>
+
+          <FieldSelect
+            value={courierFilter}
+            onChange={e => setCourierFilter(e.target.value)}
+            className="text-xs py-1.5 w-auto"
+          >
+            <option value="all">All Couriers</option>
+            <option value="PostEx">PostEx</option>
+            <option value="TCS">TCS</option>
+            <option value="Leopard">Leopard</option>
+            <option value="PakPost">PakPost</option>
+            <option value="Other">Other</option>
+          </FieldSelect>
+        </div>
+
+        <div className="text-xs text-slate-400 font-mono">
+          Showing <span className="font-bold text-slate-700">{filtered.length}</span> COD parcels
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {isLoading ? (
+          <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+            <div className="h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Loading COD parcels...
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center text-slate-400 text-xs">
+            No COD parcels found matching your filters.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-mono">
+                <tr>
+                  <th className="py-3 px-4">Order #</th>
+                  <th className="py-3 px-4">Customer</th>
+                  <th className="py-3 px-4">Address / City</th>
+                  <th className="py-3 px-4">Items</th>
+                  <th className="py-3 px-4">Parcel Date</th>
+                  <th className="py-3 px-4 text-right">COD Amount</th>
+                  <th className="py-3 px-4">Tracking / Courier</th>
+                  <th className="py-3 px-4">Parcel Status</th>
+                  <th className="py-3 px-4">COD Status</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {orders.slice(0, 6).map(o => (
-                  <tr key={o.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => onViewOrder(o.id)}>
-                    <td className="px-6 py-4 font-mono text-xs font-medium text-slate-900 group-hover:text-[#0F172A]">{o.id}</td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-sm text-slate-900">{o.customer}</div>
-                      <div className="text-xs text-slate-500">{o.city}</div>
+              <tbody className="divide-y divide-slate-100 font-sans">
+                {filtered.map((o: any) => (
+                  <tr key={o.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4 font-mono font-bold text-[#0F172A]">
+                      <button onClick={() => onViewOrder(o.id)} className="hover:underline text-indigo-600">
+                        {o.id}
+                      </button>
                     </td>
-                    <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(o.amount)}</td>
-                    <td className="px-6 py-4">
-                      <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-medium tracking-wide",
-                        o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
-                      )}>{o.handledBy}</span>
+                    <td className="py-3 px-4">
+                      <div className="font-semibold text-slate-800">{o.customer}</div>
+                      <div className="text-[11px] text-slate-400 font-mono">{o.whatsapp}</div>
                     </td>
-                    <td className="px-6 py-4"><StatusBadge status={o.status} /></td>
-                    <td className="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{o.date}</td>
+                    <td className="py-3 px-4 max-w-[180px]">
+                      <div className="truncate text-slate-700">{o.address}</div>
+                      <div className="text-[11px] text-slate-400">{o.city}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="text-slate-700 max-w-[160px] truncate">
+                        {o.products.map((p: any) => `${p.name} (${p.qty})`).join(', ')}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{o.date}</td>
+                    <td className="py-3 px-4 text-right font-mono font-bold text-[#D4AF37] whitespace-nowrap">
+                      {formatPKR(o.amount)}
+                    </td>
+                    <td className="py-3 px-4 font-mono">
+                      {o.trackingNo ? (
+                        <div>
+                          <div className="font-semibold text-slate-800">{o.trackingNo}</div>
+                          <div className="text-[10px] text-indigo-600 font-bold uppercase">{o.courier}</div>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 font-bold text-[11px] rounded-md border border-amber-200 shadow-sm whitespace-nowrap">
+                          <Clock size={12} className="text-amber-600" /> Awaiting Tracking Number
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
+                    <td className="py-3 px-4"><StatusBadge status={o.codStatus} /></td>
+                    <td className="py-3 px-4 text-right whitespace-nowrap space-x-1">
+                      <button onClick={() => onViewOrder(o.id)} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200" title="View Order">
+                        <Eye size={14} />
+                      </button>
+                      <button onClick={() => onEditOrder(o.id)} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200" title="Edit Order">
+                        <Edit2 size={14} />
+                      </button>
+                      {o.status !== "delivered" && onUpdateStatus && (
+                        <button
+                          onClick={() => onUpdateStatus(o._id || o.id, "delivered")}
+                          className="p-1 text-emerald-600 hover:text-emerald-800 rounded hover:bg-emerald-50 border border-emerald-200 inline-flex"
+                          title="Mark as Delivered"
+                        >
+                          <CheckCircle2 size={14} />
+                        </button>
+                      )}
+                      {o.status !== "returned" && o.status !== "delivered" && onUpdateStatus && (
+                        <button
+                          onClick={() => onUpdateStatus(o._id || o.id, "returned")}
+                          className="p-1 text-rose-600 hover:text-rose-800 rounded hover:bg-rose-50 border border-rose-200 inline-flex"
+                          title="Mark as Returned"
+                        >
+                          <XCircle size={14} />
+                        </button>
+                      )}
+                      {o.codStatus === "pending" && onReceiveCOD && (
+                        <button
+                          onClick={() => onReceiveCOD(o._id || o.id, new Date().toISOString().split('T')[0])}
+                          className="px-1.5 py-0.5 text-amber-700 hover:text-amber-900 rounded hover:bg-amber-100 bg-amber-50 border border-amber-300 font-bold text-[10px] inline-flex items-center gap-1 shadow-sm"
+                          title="Mark COD Cash Received"
+                        >
+                          <Banknote size={12} />
+                          <span>Receive</span>
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Non-COD Parcels Screen ────────────────────────────────────────────────────
+
+function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, onUpdateStatus }: {
+  setScreen: (s: Screen) => void;
+  onViewOrder: (id: string) => void;
+  onEditOrder: (id: string) => void;
+  onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
+  onUpdateStatus?: (id: string, status: OrderStatus) => void;
+}) {
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [courierFilter, setCourierFilter] = useState<string>("all");
+  const [trackingStateFilter, setTrackingStateFilter] = useState<"all" | "awaiting" | "tracked">("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  const { data: nonCodOrders = [], isLoading } = useQuery({
+    queryKey: ['orders', 'NON-COD', statusFilter],
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+    refetchOnMount: true,
+    queryFn: async () => {
+      const params = new URLSearchParams({ orderType: 'NON-COD' });
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      const res = await fetch(`/api/orders?${params.toString()}`);
+      const raw = (await safeResponseJson(res));
+      const data = Array.isArray(raw) ? raw : (raw?.orders || []);
+      return data.map((o: any) => ({
+        _id: o.id,
+        id: o.orderNo,
+        customer: o.customer?.name || "Unknown",
+        whatsapp: o.customer?.phone || "",
+        altPhone: o.customer?.alternatePhone || "",
+        city: o.customer?.city || "",
+        address: o.customer?.address || "",
+        amount: o.totalAmount,
+        handledBy: o.handledBy,
+        status: o.status.toLowerCase(),
+        date: new Date(o.createdAt).toISOString().split('T')[0],
+        courier: o.trackingEntries?.[0]?.courierName,
+        trackingNo: o.trackingEntries?.[0]?.trackingNumber,
+        products: o.items?.map((i: any) => ({ name: i.productName, qty: i.qty, price: i.unitPrice })) || [],
+        type: o.orderType,
+        notes: o.notes,
+        paymentType: o.paymentType || "Online",
+        deliveryCharges: o.deliveryCharges || 0,
+        advancePayment: o.advancePayment || 0,
+      }));
+    }
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ['stats'],
+    queryFn: async () => {
+      const res = await fetch('/api/stats');
+      if (!res.ok) return null;
+      return safeResponseJson(res);
+    }
+  });
+
+  const awaitingCount = nonCodOrders.filter((o: any) => !o.trackingNo).length;
+  const trackedCount = nonCodOrders.filter((o: any) => !!o.trackingNo).length;
+
+  const filtered = nonCodOrders.filter((o: any) => {
+    if (trackingStateFilter === 'awaiting' && o.trackingNo) return false;
+    if (trackingStateFilter === 'tracked' && !o.trackingNo) return false;
+    if (courierFilter !== 'all' && o.courier?.toLowerCase() !== courierFilter.toLowerCase()) return false;
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase();
+      const matchNo = o.id.toLowerCase().includes(q);
+      const matchCust = o.customer.toLowerCase().includes(q);
+      const matchPhone = o.whatsapp.includes(q);
+      const matchTrack = o.trackingNo?.toLowerCase().includes(q);
+      const matchCity = o.city?.toLowerCase().includes(q);
+      const matchAddress = o.address?.toLowerCase().includes(q);
+      if (!matchNo && !matchCust && !matchPhone && !matchTrack && !matchCity && !matchAddress) return false;
+    }
+    return true;
+  });
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-[#0F172A] flex items-center gap-2">
+            <Package className="text-indigo-600" size={22} />
+            Non-COD Parcels
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">Prepaid & Online paid customer order management</p>
+        </div>
+        <button
+          onClick={() => setScreen("create-order")}
+          className="flex items-center gap-1.5 px-4 py-2 bg-[#0F172A] hover:bg-slate-800 text-white font-bold text-xs rounded-lg shadow-sm transition-all"
+        >
+          <Plus size={14} /> New Non-COD Parcel
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <StatCard
+          label="Non-COD Parcels"
+          value={stats?.nonCod?.count ?? filtered.length}
+          sub="Prepaid / Online Paid Orders"
+          icon={Package}
+          color="bg-indigo-50 text-indigo-700"
+        />
+        <StatCard
+          label="Non-COD Sales"
+          value={formatPKR(stats?.nonCod?.sales ?? 0)}
+          sub="Total Non-COD Revenue"
+          icon={TrendingUp}
+          color="bg-blue-50 text-blue-700"
+        />
+      </div>
+
+      <div className="flex gap-1.5 p-1 bg-slate-100 rounded-lg w-fit border border-slate-200/60 flex-wrap">
+        <button
+          onClick={() => setTrackingStateFilter("all")}
+          className={cn(
+            "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+            trackingStateFilter === "all" ? "bg-white text-[#0F172A] font-bold shadow-sm" : "text-slate-500 hover:text-slate-800"
+          )}
+        >
+          All Non-COD ({nonCodOrders.length})
+        </button>
+        <button
+          onClick={() => setTrackingStateFilter("awaiting")}
+          className={cn(
+            "px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5",
+            trackingStateFilter === "awaiting" ? "bg-amber-500 text-white shadow-sm" : "text-amber-700 bg-amber-50/70 hover:bg-amber-100"
+          )}
+        >
+          <Clock size={13} /> Awaiting Tracking ({awaitingCount})
+        </button>
+        <button
+          onClick={() => setTrackingStateFilter("tracked")}
+          className={cn(
+            "px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5",
+            trackingStateFilter === "tracked" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
+          )}
+        >
+          <Truck size={13} /> Tracked / Shipped ({trackedCount})
+        </button>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex flex-wrap gap-2 items-center flex-1 min-w-[280px]">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search Non-COD order, customer, phone, tracking..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0F172A]"
+            />
+          </div>
+
+          <FieldSelect
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="text-xs py-1.5 w-auto"
+          >
+            <option value="all">All Parcel Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="shipped">Shipped</option>
+            <option value="delivered">Delivered</option>
+            <option value="returned">Returned</option>
+            <option value="void">Void</option>
+          </FieldSelect>
+
+          <FieldSelect
+            value={courierFilter}
+            onChange={e => setCourierFilter(e.target.value)}
+            className="text-xs py-1.5 w-auto"
+          >
+            <option value="all">All Couriers</option>
+            <option value="PostEx">PostEx</option>
+            <option value="TCS">TCS</option>
+            <option value="Leopard">Leopard</option>
+            <option value="PakPost">PakPost</option>
+            <option value="Other">Other</option>
+          </FieldSelect>
         </div>
 
-        {/* Recent COD */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
-            <h2 className="text-sm font-semibold text-[#0F172A]">Recent COD</h2>
-            <button onClick={() => setScreen("cod")} className="text-sm text-slate-500 hover:text-[#0F172A] font-medium transition-colors">View all →</button>
+        <div className="text-xs text-slate-400 font-mono">
+          Showing <span className="font-bold text-slate-700">{filtered.length}</span> Non-COD parcels
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {isLoading ? (
+          <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+            <div className="h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Loading Non-COD parcels...
           </div>
-          <div className="overflow-x-auto flex-1 scrollbar-hide">
-            <table className="w-full text-sm min-w-[500px]">
-              <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
-                <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  <th className="text-left px-6 py-3 whitespace-nowrap">Order ID</th>
-                  <th className="text-right px-6 py-3">Amount</th>
-                  <th className="text-left px-6 py-3">Status</th>
-                  <th className="text-left px-6 py-3">Received Date</th>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center text-slate-400 text-xs">
+            No Non-COD parcels found matching your filters.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-mono">
+                <tr>
+                  <th className="py-3 px-4">Order #</th>
+                  <th className="py-3 px-4">Customer</th>
+                  <th className="py-3 px-4">Address / City</th>
+                  <th className="py-3 px-4">Items</th>
+                  <th className="py-3 px-4">Parcel Date</th>
+                  <th className="py-3 px-4 text-right">Order Total</th>
+                  <th className="py-3 px-4">Payment Method</th>
+                  <th className="py-3 px-4">Tracking / Courier</th>
+                  <th className="py-3 px-4">Parcel Status</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {orders.filter(o => o.status === "delivered" || o.codStatus === "received").slice(0, 6).map(o => (
-                  <tr key={o.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => onViewOrder(o.id)}>
-                    <td className="px-6 py-4 font-mono text-xs font-medium text-slate-900 group-hover:text-[#0F172A]">{o.id}</td>
-                    <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(o.amount)}</td>
-                    <td className="px-6 py-4"><StatusBadge status={o.codStatus} /></td>
-                    <td className="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{o.receivedDate || "—"}</td>
+              <tbody className="divide-y divide-slate-100 font-sans">
+                {filtered.map((o: any) => (
+                  <tr key={o.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4 font-mono font-bold text-[#0F172A]">
+                      <button onClick={() => onViewOrder(o.id)} className="hover:underline text-indigo-600">
+                        {o.id}
+                      </button>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="font-semibold text-slate-800">{o.customer}</div>
+                      <div className="text-[11px] text-slate-400 font-mono">{o.whatsapp}</div>
+                    </td>
+                    <td className="py-3 px-4 max-w-[180px]">
+                      <div className="truncate text-slate-700">{o.address}</div>
+                      <div className="text-[11px] text-slate-400">{o.city}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="text-slate-700 max-w-[160px] truncate">
+                        {o.products.map((p: any) => `${p.name} (${p.qty})`).join(', ')}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{o.date}</td>
+                    <td className="py-3 px-4 text-right font-mono font-bold text-[#0F172A] whitespace-nowrap">
+                      {formatPKR(o.amount)}
+                    </td>
+                    <td className="py-3 px-4 font-medium text-slate-700">
+                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[11px] font-bold">
+                        {o.paymentType || "Online"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-mono">
+                      {o.trackingNo ? (
+                        <div>
+                          <div className="font-semibold text-slate-800">{o.trackingNo}</div>
+                          <div className="text-[10px] text-indigo-600 font-bold uppercase">{o.courier}</div>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 font-bold text-[11px] rounded-md border border-amber-200 shadow-sm whitespace-nowrap">
+                          <Clock size={12} className="text-amber-600" /> Awaiting Tracking Number
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
+                    <td className="py-3 px-4 text-right whitespace-nowrap space-x-1">
+                      <button onClick={() => onViewOrder(o.id)} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200" title="View Order">
+                        <Eye size={14} />
+                      </button>
+                      <button onClick={() => onEditOrder(o.id)} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200" title="Edit Order">
+                        <Edit2 size={14} />
+                      </button>
+                      {o.status !== "delivered" && onUpdateStatus && (
+                        <button
+                          onClick={() => onUpdateStatus(o._id || o.id, "delivered")}
+                          className="p-1 text-emerald-600 hover:text-emerald-800 rounded hover:bg-emerald-50 border border-emerald-200 inline-flex"
+                          title="Mark as Delivered"
+                        >
+                          <CheckCircle2 size={14} />
+                        </button>
+                      )}
+                      {o.status !== "returned" && o.status !== "delivered" && onUpdateStatus && (
+                        <button
+                          onClick={() => onUpdateStatus(o._id || o.id, "returned")}
+                          className="p-1 text-rose-600 hover:text-rose-800 rounded hover:bg-rose-50 border border-rose-200 inline-flex"
+                          title="Mark as Returned"
+                        >
+                          <XCircle size={14} />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-
-      {/* Weekly chart */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sm:p-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-sm font-semibold text-[#0F172A]">Weekly Performance</h2>
-            <p className="text-sm text-slate-500 mt-1">Jun 14 – Jun 20, 2026</p>
-          </div>
-          <div className="flex items-center gap-6 text-sm text-slate-500">
-            <span className="flex items-center gap-2 font-medium"><span className="w-3 h-3 bg-[#0F172A] rounded-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)]" /> Orders</span>
-            <span className="flex items-center gap-2 font-medium"><span className="w-3 h-3 bg-[#D4AF37] rounded-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]" /> Revenue</span>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={WEEKLY_DATA} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={24} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,.06)" }} />
-              <Bar dataKey="orders" fill="#0F172A" radius={[3, 3, 0, 0]} name="Orders" />
-            </BarChart>
-          </ResponsiveContainer>
-          <ResponsiveContainer width="100%" height={160}>
-            <AreaChart data={WEEKLY_DATA} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id="revG" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <YAxis hide />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
-                formatter={(v: number) => [formatPKR(v), "Revenue"]} />
-              <Area type="monotone" dataKey="revenue" stroke="#D4AF37" strokeWidth={2} fill="url(#revG)" dot={false} name="Revenue" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -802,6 +1497,7 @@ function CreateOrderScreen({
   const [notes, setNotes] = useState("");
   const [products, setProducts] = useState([{ name: "", qty: 1, price: 0 }]);
   const [saved, setSaved] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -837,16 +1533,50 @@ function CreateOrderScreen({
     }
   }, [existing?.whatsapp, editOrderId]);
 
-  const subtotal = products.reduce((s, p) => s + p.qty * p.price, 0);
+  const subtotal = products.reduce((s, p) => s + (Number(p.qty) || 0) * (Number(p.price) || 0), 0);
   const grandTotal = subtotal + deliveryCharges;
-  const orderIdToSave = editOrderId || `HKF-2026-${String(orders.length + 148).padStart(6, "0")}`;
+  const remainingAmount = Math.max(0, grandTotal - advancePayment);
+  const orderIdToSave = editOrderId || `HKF-2026-${String(orders.length + 1).padStart(6, "0")}`;
+
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const triggerToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => {
+      setToastMsg(null);
+    }, 3500);
+  };
+
+  // Automatically enforce NON-COD business rule: NON-COD requires advance == grandTotal.
+  // If user sets NON-COD but advance < grandTotal, automatically convert to COD and show a toast notification.
+  useEffect(() => {
+    if (orderType === "NON-COD" && advancePayment < grandTotal && grandTotal > 0) {
+      setOrderType("COD");
+      triggerToast(`Balance remaining (Rs ${Math.max(0, grandTotal - advancePayment).toLocaleString()}). Order type set to COD.`);
+      setErrorMsg("");
+    }
+  }, [orderType, advancePayment, grandTotal]);
+
+  const handleOrderTypeChange = (newType: "COD" | "NON-COD") => {
+    setErrorMsg("");
+    if (newType === "NON-COD") {
+      if (advancePayment < grandTotal) {
+        const rem = Math.max(0, grandTotal - advancePayment);
+        triggerToast(`Cannot select NON-COD: Remaining balance of Rs ${rem.toLocaleString()} must be collected via COD.`);
+        return;
+      }
+    }
+    setOrderType(newType);
+  };
 
   const addProduct = () => setProducts(p => [...p, { name: "", qty: 1, price: 0 }]);
   const removeProduct = (i: number) => setProducts(p => p.filter((_, idx) => idx !== i));
   const updateProduct = (i: number, field: string, val: string | number) =>
     setProducts(p => p.map((row, idx) => idx === i ? { ...row, [field]: val } : row));
 
-  const handleSave = () => {
+  const handleSave = (shouldPrintAfter: boolean = false) => {
+    if (isSubmitting || saved) return;
+
     if (!whatsapp.trim()) {
       setErrorMsg("WhatsApp number is mandatory!");
       return;
@@ -867,12 +1597,21 @@ function CreateOrderScreen({
       setErrorMsg("Please specify valid product names, quantities, and prices!");
       return;
     }
+    if (advancePayment > grandTotal) {
+      setErrorMsg("Advance payment cannot exceed Grand Total.");
+      return;
+    }
     setErrorMsg("");
+    setIsSubmitting(true);
+
+    const remBalance = Math.max(0, grandTotal - advancePayment);
+    const finalType = remBalance === 0 ? "NON-COD" : "COD";
 
     const newOrder: Order = {
       id: orderIdToSave,
       customer: customerName,
       whatsapp: whatsapp,
+      altPhone: altPhone,
       province: province,
       city: city,
       address: address,
@@ -882,7 +1621,7 @@ function CreateOrderScreen({
       codStatus: editOrderId ? (orders.find(item => item.id === editOrderId)?.codStatus || "pending") : "pending",
       date: editOrderId ? (orders.find(item => item.id === editOrderId)?.date || "2026-06-20") : "2026-06-20",
       products: products,
-      type: orderType,
+      type: finalType,
       deliveryCharges: deliveryCharges,
       advancePayment: advancePayment,
       paymentType: paymentType,
@@ -892,12 +1631,24 @@ function CreateOrderScreen({
       receivedDate: editOrderId ? orders.find(item => item.id === editOrderId)?.receivedDate : undefined,
     };
 
-    onSaveOrder(newOrder);
-    setSaved(true);
+    try {
+      onSaveOrder(newOrder);
+      setSaved(true);
+      if (shouldPrintAfter) {
+        setShowPrint(true);
+      }
+    } catch (e) {
+      setIsSubmitting(false);
+      return;
+    }
+
     setTimeout(() => {
       setSaved(false);
-      if (editOrderId) clearEditId();
-      setScreen("orders");
+      setIsSubmitting(false);
+      if (!shouldPrintAfter) {
+        if (editOrderId) clearEditId();
+        setScreen("orders");
+      }
     }, 1500);
   };
 
@@ -959,7 +1710,18 @@ function CreateOrderScreen({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-5 max-w-5xl pb-8" onKeyDown={handleKeyDown}>
+    <div className="flex flex-col lg:flex-row gap-5 max-w-5xl pb-8 relative" onKeyDown={handleKeyDown}>
+      {/* Floating Auto-dismissing Toast Notification */}
+      {toastMsg && (
+        <div className="fixed top-20 right-6 z-50 bg-[#0F172A] text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-3 text-xs font-semibold animate-bounce">
+          <AlertCircle size={18} className="text-[#D4AF37] flex-shrink-0" />
+          <span>{toastMsg}</span>
+          <button onClick={() => setToastMsg(null)} className="ml-2 text-slate-400 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Left Column: Form */}
       <div className="flex-1 space-y-4">
         {/* Header & Agent */}
@@ -1088,11 +1850,15 @@ function CreateOrderScreen({
                       className="w-full px-2.5 py-1.5 text-[13px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 bg-white" />
                   </div>
                   <div className="col-span-4 sm:col-span-2">
-                    <input type="number" min={1} value={p.qty} onChange={e => updateProduct(i, "qty", e.target.value === "" ? "" : parseInt(e.target.value))} required
+                    <input type="number" min={1} value={p.qty} 
+                      onFocus={e => e.target.select()}
+                      onChange={e => updateProduct(i, "qty", e.target.value === "" ? "" : parseInt(e.target.value))} required
                       className="w-full px-2 py-1.5 text-[13px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-center font-mono bg-white" />
                   </div>
                   <div className="col-span-5 sm:col-span-2">
-                    <input type="number" min={0} value={p.price === 0 ? "" : p.price} onChange={e => updateProduct(i, "price", e.target.value === "" ? "" : parseInt(e.target.value))} placeholder="0" required
+                    <input type="number" min={0} value={p.price === 0 ? "" : p.price} 
+                      onFocus={e => e.target.select()}
+                      onChange={e => updateProduct(i, "price", e.target.value === "" ? "" : parseInt(e.target.value))} placeholder="0" required
                       className="w-full px-2 py-1.5 text-[13px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono bg-white" />
                   </div>
                   <div className="col-span-3 sm:col-span-2 flex items-center justify-end gap-2 pr-1">
@@ -1128,18 +1894,30 @@ function CreateOrderScreen({
               </div>
               <div className="flex justify-between items-center text-slate-500">
                 <span>Delivery (DC)</span>
-                <input type="number" min={0} value={deliveryCharges} onChange={e => setDeliveryCharges(parseInt(e.target.value) || 0)}
+                <input type="number" min={0} 
+                  value={deliveryCharges === 0 ? "" : deliveryCharges} 
+                  placeholder="0"
+                  onFocus={e => e.target.select()}
+                  onChange={e => setDeliveryCharges(e.target.value === "" ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
                   className="w-20 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 text-right font-mono" />
+              </div>
+              <div className="flex justify-between font-semibold text-slate-700 border-t border-slate-100 pt-1.5">
+                <span>Grand Total</span>
+                <span className="font-mono">{formatPKR(grandTotal)}</span>
               </div>
               {advancePayment > 0 && (
                 <div className="flex justify-between items-center text-emerald-600 font-medium">
-                  <span>Advance</span>
+                  <span>Advance Paid</span>
                   <span className="font-mono">- {formatPKR(advancePayment)}</span>
                 </div>
               )}
               <div className="flex justify-between border-t border-slate-100 pt-2 mt-2 font-bold text-base text-[#0F172A]">
-                <span>{orderType === "COD" ? "Net COD" : "Total"}</span>
-                <span className="font-mono text-[#D4AF37]">{formatPKR(Math.max(0, grandTotal - advancePayment))}</span>
+                <span>{orderType === "COD" ? "COD Amount" : "Payment Status"}</span>
+                <span className="font-mono text-[#D4AF37]">
+                  {orderType === "COD" 
+                    ? formatPKR(remainingAmount) 
+                    : (remainingAmount === 0 ? "Fully Paid (COD: Rs 0)" : formatPKR(remainingAmount))}
+                </span>
               </div>
             </div>
 
@@ -1151,7 +1929,7 @@ function CreateOrderScreen({
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Type</label>
                 <div className="flex bg-slate-100 p-1 rounded-lg">
                   {(["COD", "NON-COD"] as const).map(t => (
-                    <button key={t} type="button" onClick={() => setOrderType(t)}
+                    <button key={t} type="button" onClick={() => handleOrderTypeChange(t)}
                       className={cn(
                         "flex-1 py-1 text-[11px] font-bold rounded transition-colors",
                         orderType === t ? "bg-white text-[#0F172A] shadow-sm ring-1 ring-black/5" : "text-slate-500 hover:bg-slate-800 hover:text-white"
@@ -1181,7 +1959,11 @@ function CreateOrderScreen({
               <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Advance Amount</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono">Rs</span>
-                <input type="number" min={0} value={advancePayment} onChange={e => setAdvancePayment(parseInt(e.target.value) || 0)}
+                <input type="number" min={0} 
+                  value={advancePayment === 0 ? "" : advancePayment} 
+                  placeholder="0"
+                  onFocus={e => e.target.select()}
+                  onChange={e => setAdvancePayment(e.target.value === "" ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
                   className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors" />
               </div>
             </div>
@@ -1195,10 +1977,24 @@ function CreateOrderScreen({
           </div>
 
           <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col gap-2 rounded-b-xl">
-            <button onClick={handleSave} className="w-full py-2.5 bg-[#0F172A] hover:bg-[#1E293B] text-white rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors">
-              {saved ? <><Check size={16} /> Saved!</> : <><Save size={16} /> Save Order</>}
+            <button 
+              onClick={() => handleSave(false)} 
+              disabled={isSubmitting || saved}
+              className="w-full py-2.5 bg-[#0F172A] hover:bg-[#1E293B] text-white rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
+              ) : saved ? (
+                <><Check size={16} /> Saved!</>
+              ) : (
+                <><Save size={16} /> Save Order</>
+              )}
             </button>
-            <button onClick={() => setShowPrint(true)} className="w-full py-2 bg-white hover:bg-slate-50 text-[#0F172A] border border-slate-200 rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors">
+            <button 
+              onClick={() => handleSave(true)} 
+              disabled={isSubmitting || saved}
+              className="w-full py-2 bg-white hover:bg-slate-50 text-[#0F172A] border border-slate-200 rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <Printer size={16} /> Save & Print
             </button>
           </div>
@@ -1269,13 +2065,18 @@ function OrdersScreen({
   onEditOrder,
   orders,
   onVoidOrder,
+  onUpdateStatus,
 }: {
   setScreen: (s: Screen) => void;
   onViewOrder: (id: string) => void;
   onEditOrder: (id: string) => void;
   orders: Order[];
   onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
+  onUpdateStatus?: (id: string, status: OrderStatus) => void;
 }) {
+  const [orderTypeFilter, setOrderTypeFilter] = useState<"all" | "COD" | "NON-COD">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [dateFilter, setDateFilter] = useState("all");
   const [handledFilter, setHandledFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -1294,7 +2095,24 @@ function OrdersScreen({
   const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
   const [printOrderId, setPrintOrderId] = useState<string | null>(null);
 
+  const codCount = orders.filter(o => o.type === "COD").length;
+  const nonCodCount = orders.filter(o => o.type === "NON-COD").length;
+
   const filtered = orders.filter(o => {
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase();
+      const matchNo = o.id.toLowerCase().includes(q);
+      const matchCust = o.customer.toLowerCase().includes(q);
+      const matchPhone = o.whatsapp.includes(q);
+      const matchTrack = o.trackingNo?.toLowerCase().includes(q);
+      const matchCity = o.city?.toLowerCase().includes(q);
+      const matchAddress = o.address?.toLowerCase().includes(q);
+      if (!matchNo && !matchCust && !matchPhone && !matchTrack && !matchCity && !matchAddress) return false;
+    }
+
+    // Order Type Filter (COD vs NON-COD)
+    if (orderTypeFilter !== "all" && o.type !== orderTypeFilter) return false;
+
     // Handled By Staff
     if (handledFilter !== "all" && o.handledBy !== handledFilter) return false;
     
@@ -1352,6 +2170,37 @@ function OrdersScreen({
         <Btn onClick={() => setScreen("create-order")}><Plus size={14} /> New Order</Btn>
       </div>
 
+      {/* Order Type Sub-Tabs */}
+      <div className="flex gap-1.5 p-1 bg-slate-100/70 rounded-lg w-fit border border-slate-200/60 flex-wrap">
+        <button
+          onClick={() => setOrderTypeFilter("all")}
+          className={cn(
+            "px-3.5 py-1.5 rounded-md text-xs font-bold transition-all",
+            orderTypeFilter === "all" ? "bg-white text-[#0F172A] shadow-sm" : "text-slate-500 hover:text-slate-800"
+          )}
+        >
+          All Parcels ({orders.length})
+        </button>
+        <button
+          onClick={() => setOrderTypeFilter("COD")}
+          className={cn(
+            "px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5",
+            orderTypeFilter === "COD" ? "bg-emerald-600 text-white shadow-sm" : "text-emerald-700 bg-emerald-50/70 hover:bg-emerald-100 border border-emerald-200/50"
+          )}
+        >
+          <Banknote size={14} /> COD Parcels ({codCount})
+        </button>
+        <button
+          onClick={() => setOrderTypeFilter("NON-COD")}
+          className={cn(
+            "px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5",
+            orderTypeFilter === "NON-COD" ? "bg-indigo-600 text-white shadow-sm" : "text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 border border-indigo-200/50"
+          )}
+        >
+          <Package size={14} /> Non-COD Parcels ({nonCodCount})
+        </button>
+      </div>
+
       {/* Date tabs */}
       <div className="flex gap-1 bg-slate-100/50 rounded-lg p-1 w-fit flex-wrap border border-slate-200/50">
         {["all", "today", "week", "month", "year", "custom"].map(f => (
@@ -1376,7 +2225,18 @@ function OrdersScreen({
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search order no, customer, phone, address, tracking..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0F172A] shadow-sm"
+          />
+        </div>
+
         <select value={handledFilter} onChange={e => setHandledFilter(e.target.value)}
           className="px-3.5 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors hover:border-slate-300">
           <option value="all">All Staff</option>
@@ -1440,6 +2300,7 @@ function OrdersScreen({
                     className="rounded border-slate-300 accent-[#0F172A] w-3.5 h-3.5 cursor-pointer" />
                 </th>
                 <th className="text-left px-6 py-3">Order No</th>
+                <th className="text-left px-6 py-3">Type</th>
                 <th className="text-left px-6 py-3">Customer</th>
                 <th className="text-left px-6 py-3 hidden md:table-cell">WhatsApp</th>
                 <th className="text-right px-6 py-3">Amount</th>
@@ -1466,6 +2327,16 @@ function OrdersScreen({
                         className="rounded border-slate-300 accent-[#0F172A] w-3.5 h-3.5 cursor-pointer" />
                     </td>
                     <td className="px-6 py-4 font-mono text-xs font-semibold text-[#0F172A]">{o.id}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={cn(
+                        "px-2.5 py-1 rounded-md text-[11px] font-bold tracking-wide border shadow-sm whitespace-nowrap inline-block",
+                        o.type === "COD" 
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                          : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                      )}>
+                        {o.type}
+                      </span>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="font-medium text-sm text-slate-900 group-hover:text-[#0F172A] transition-colors cursor-pointer" onClick={() => onViewOrder(o.id)}>{o.customer}</div>
                       <div className="text-xs text-slate-500">{o.city}</div>
@@ -1489,6 +2360,18 @@ function OrdersScreen({
                           className="p-1.5 rounded-md hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-sm text-slate-400 hover:text-blue-600 transition-all" title="Edit">
                           <Edit2 size={14} />
                         </button>
+                        {status !== "delivered" && onUpdateStatus && (
+                          <button onClick={() => onUpdateStatus(o._id || o.id, "delivered")}
+                            className="p-1.5 rounded-md hover:bg-emerald-50 border border-transparent hover:border-emerald-200 text-emerald-600 transition-all" title="Mark as Delivered">
+                            <CheckCircle2 size={14} />
+                          </button>
+                        )}
+                        {status !== "returned" && status !== "delivered" && onUpdateStatus && (
+                          <button onClick={() => onUpdateStatus(o._id || o.id, "returned")}
+                            className="p-1.5 rounded-md hover:bg-rose-50 border border-transparent hover:border-rose-200 text-rose-600 transition-all" title="Mark as Returned">
+                            <XCircle size={14} />
+                          </button>
+                        )}
                         <button onClick={() => setPrintOrderId(o.id)}
                           className="p-1.5 rounded-md hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-sm text-slate-400 hover:text-slate-700 transition-all" title="Print">
                           <Printer size={14} />
@@ -1875,10 +2758,15 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
 
 function TrackingScreen({ orders, onSaveTracking, onUpdateStatus }: { orders: Order[]; onSaveTracking: (id: string, courier: string, no: string, no2?: string) => void; onUpdateStatus: (id: string, status: OrderStatus) => void; }) {
   const [tab, setTab] = useState<"awaiting" | "added">("awaiting");
+  const [awaitingSubTab, setAwaitingSubTab] = useState<"COD" | "NON-COD" | "all">("COD");
   const [inputs, setInputs] = useState<Record<string, { courier: string; no: string; no2?: string }>>({});
   const [saved, setSaved] = useState<Set<string>>(new Set());
 
-  const awaiting = orders.filter(o => !o.trackingNo && o.status !== "void" && !saved.has(o.id));
+  const codAwaiting = orders.filter(o => o.type === "COD" && !o.trackingNo && o.status !== "void" && !saved.has(o.id));
+  const nonCodAwaiting = orders.filter(o => o.type === "NON-COD" && !o.trackingNo && o.status !== "void" && !saved.has(o.id));
+  const allAwaiting = orders.filter(o => !o.trackingNo && o.status !== "void" && !saved.has(o.id));
+  const awaiting = awaitingSubTab === "COD" ? codAwaiting : awaitingSubTab === "NON-COD" ? nonCodAwaiting : allAwaiting;
+
   const added = orders.filter(o => !!o.trackingNo || saved.has(o.id));
 
   const set = (id: string, field: string, val: string) =>
@@ -1895,22 +2783,56 @@ function TrackingScreen({ orders, onSaveTracking, onUpdateStatus }: { orders: Or
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-[#0F172A]">Tracking</h1>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-xl font-bold text-[#0F172A]">Tracking Management</h1>
+      </div>
 
-      <div className="flex gap-1 border-b border-slate-100">
+      <div className="flex gap-1 border-b border-slate-100 flex-wrap">
         {[
-          { id: "awaiting", label: `Awaiting Tracking (${awaiting.length})` },
-          { id: "added", label: `Tracking Added (${added.length})` },
+          { id: "awaiting", label: `Awaiting Tracking (${allAwaiting.length})` },
+          { id: "added", label: `Tracking Added / Shipped (${added.length})` },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id as typeof tab)}
             className={cn(
               "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-              tab === t.id ? "border-[#0F172A] text-[#0F172A]" : "border-transparent text-slate-500 hover:text-slate-700"
+              tab === t.id ? "border-[#0F172A] text-[#0F172A] font-bold" : "border-transparent text-slate-500 hover:text-slate-700"
             )}>
             {t.label}
           </button>
         ))}
       </div>
+
+      {tab === "awaiting" && (
+        <div className="flex items-center gap-2 p-1.5 bg-slate-100/70 rounded-lg w-fit border border-slate-200/60">
+          <button
+            onClick={() => setAwaitingSubTab("COD")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5",
+              awaitingSubTab === "COD" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
+            )}
+          >
+            <Banknote size={14} /> COD Awaiting ({codAwaiting.length})
+          </button>
+          <button
+            onClick={() => setAwaitingSubTab("NON-COD")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5",
+              awaitingSubTab === "NON-COD" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
+            )}
+          >
+            <Package size={14} /> NON-COD Awaiting ({nonCodAwaiting.length})
+          </button>
+          <button
+            onClick={() => setAwaitingSubTab("all")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-md text-xs font-medium transition-all",
+              awaitingSubTab === "all" ? "bg-white text-slate-900 shadow-sm font-bold" : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            All Awaiting ({allAwaiting.length})
+          </button>
+        </div>
+      )}
 
       {tab === "awaiting" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
@@ -2322,7 +3244,7 @@ function SettlementsScreen() {
         });
         
         if (response.ok) {
-          const data = await response.json();
+          const data = (await safeResponseJson(response)) || [];
           // Filter out obvious noise from unmatched items
           const cleanData = data.filter((row: any) => {
             if (row.status !== 'unmatched') return true;
@@ -2357,7 +3279,7 @@ function SettlementsScreen() {
         body: JSON.stringify({ orderIds: matchedOrderIds })
       });
       if (!res.ok) throw new Error('Failed to approve');
-      return res.json();
+      return await safeResponseJson(res);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
@@ -2746,8 +3668,8 @@ function ActivityLogScreen({ activityLogs }: { activityLogs: typeof ACTIVITY_DAT
                   <td className="px-6 py-4 font-mono text-xs font-bold text-[#0F172A]">{log.order}</td>
                   <td className="px-6 py-4">
                     <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide",
-                      log.by === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
-                    )}>{log.by}</span>
+                      (log.performedBy || log.by) === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
+                    )}>{log.performedBy || log.by}</span>
                   </td>
                 </tr>
               ))}
@@ -2762,9 +3684,44 @@ function ActivityLogScreen({ activityLogs }: { activityLogs: typeof ACTIVITY_DAT
 // ─── Settings Screen ──────────────────────────────────────────────────────────
 
 function SettingsScreen() {
+  const queryClient = useQueryClient();
   const [shopName, setShopName] = useState("HK Fabric");
   const [pin, setPin] = useState({ current: "", next: "", confirm: "" });
   const [saved, setSaved] = useState(false);
+  const [resetPin, setResetPin] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetMsg, setResetMsg] = useState<{ text: string; error?: boolean } | null>(null);
+
+  const handleResetDatabase = async () => {
+    if (!resetPin) {
+      setResetMsg({ text: "Please enter Owner PIN", error: true });
+      return;
+    }
+    if (!confirm("CRITICAL WARNING: This will PERMANENTLY ERASE all orders, customers, and activity logs. Are you sure you want to reset everything to 0 for 1st September?")) {
+      return;
+    }
+    setIsResetting(true);
+    setResetMsg(null);
+    try {
+      const res = await fetch('/api/reset-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: resetPin }),
+      });
+      const data = await safeResponseJson(res);
+      if (!res.ok) throw new Error(data.error || "Failed to reset database");
+
+      localStorage.removeItem("offline_orders");
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+      setResetMsg({ text: "Database successfully reset to 0! New orders will start from 1 (HKF-2026-000001)." });
+      setResetPin("");
+    } catch (err: any) {
+      setResetMsg({ text: err.message || "Error resetting database", error: true });
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   return (
     <div className="space-y-5 max-w-lg pb-8">
@@ -2810,6 +3767,43 @@ function SettingsScreen() {
       <Btn size="lg" onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2500); }}>
         {saved ? <><Check size={15} /> Saved!</> : <><Save size={15} /> Save Settings</>}
       </Btn>
+
+      {/* 1st September System Reset */}
+      <div className="bg-red-50/50 rounded-xl border border-red-200 shadow-sm p-5 space-y-4 mt-8">
+          <div className="flex items-center gap-2 text-red-800 font-bold text-sm">
+          <AlertTriangle size={18} className="text-red-600" />
+          <span>System Reset (1st September Fresh Start)</span>
+        </div>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Wipe all test/existing orders, customers, and activity logs to start fresh with order number 1 (<code className="font-mono text-slate-800">HKF-2026-000001</code>).
+        </p>
+
+        {resetMsg && (
+          <div className={cn("p-3 rounded-lg text-xs font-medium border", resetMsg.error ? "bg-red-100 text-red-700 border-red-200" : "bg-emerald-100 text-emerald-800 border-emerald-200")}>
+            {resetMsg.text}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-slate-700 block">Enter Owner PIN to Confirm Reset</label>
+          <input
+            type="password"
+            maxLength={4}
+            value={resetPin}
+            onChange={e => setResetPin(e.target.value)}
+            placeholder="••••"
+            className="w-full px-3 py-2 text-center text-xl tracking-widest border border-red-200 bg-white rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+          />
+        </div>
+
+        <button
+          onClick={handleResetDatabase}
+          disabled={isResetting || !resetPin}
+          className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+        >
+          {isResetting ? "Resetting Database..." : "Reset All System Data to 0"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -2903,11 +3897,370 @@ function DailyClosingScreen({ orders }: { orders: Order[] }) {
   );
 }
 
+// ─── Daily Parcel History & Calendar View Screen ─────────────────────────────
+
+function DailyParcelHistoryScreen({ setScreen, onViewOrder, orders }: {
+  setScreen: (s: Screen) => void;
+  onViewOrder: (id: string) => void;
+  orders: Order[];
+}) {
+  const todayPKT = new Date(Date.now() + 5 * 3600 * 1000).toISOString().split('T')[0];
+  const fourteenDaysAgoPKT = new Date(Date.now() - 13 * 24 * 3600 * 1000 + 5 * 3600 * 1000).toISOString().split('T')[0];
+
+  const [startDate, setStartDate] = useState(fourteenDaysAgoPKT);
+  const [endDate, setEndDate] = useState(todayPKT);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "COD" | "NON-COD">("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+
+  const { data: dailyCounts = [], isLoading: loadingCounts } = useQuery({
+    queryKey: ['daily-counts', startDate, endDate, typeFilter],
+    queryFn: async () => {
+      const res = await fetch(`/api/orders/daily-counts?startDate=${startDate}&endDate=${endDate}&orderType=${typeFilter}`);
+      if (!res.ok) return [];
+      return (await safeResponseJson(res)) || [];
+    }
+  });
+
+  const filteredOrders = orders.filter(o => {
+    if (typeFilter !== "ALL" && o.type !== typeFilter) return false;
+    if (statusFilter !== "ALL" && o.status.toLowerCase() !== statusFilter.toLowerCase()) return false;
+    if (selectedDate && o.date !== selectedDate) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const matchId = o.id.toLowerCase().includes(q);
+      const matchCust = o.customer.toLowerCase().includes(q);
+      const matchPhone = o.whatsapp.toLowerCase().includes(q) || (o.altPhone && o.altPhone.toLowerCase().includes(q));
+      const matchAddress = o.address.toLowerCase().includes(q) || o.city.toLowerCase().includes(q);
+      const matchTrack = o.trackingNo && o.trackingNo.toLowerCase().includes(q);
+      return matchId || matchCust || matchPhone || matchAddress || matchTrack;
+    }
+    return true;
+  });
+
+  const totalRangeCount = dailyCounts.reduce((acc: number, item: any) => acc + (item.count || 0), 0);
+  const totalRangeSales = dailyCounts.reduce((acc: number, item: any) => acc + (item.sales || 0), 0);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-[#0F172A] flex items-center gap-2">
+            <Calendar size={20} className="text-indigo-600" /> Daily Parcel History & Calendar
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">Authoritative day-by-day parcel volume and date-filtered search</p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => { setStartDate(todayPKT); setEndDate(todayPKT); setSelectedDate(todayPKT); }}
+            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-colors">
+            Today
+          </button>
+          <button onClick={() => {
+            const yest = new Date(Date.now() - 24 * 3600 * 1000 + 5 * 3600 * 1000).toISOString().split('T')[0];
+            setStartDate(yest); setEndDate(yest); setSelectedDate(yest);
+          }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-colors">
+            Yesterday
+          </button>
+          <button onClick={() => { setStartDate(fourteenDaysAgoPKT); setEndDate(todayPKT); setSelectedDate(null); }}
+            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-colors">
+            Last 14 Days
+          </button>
+        </div>
+      </div>
+
+      {/* Date Range & Filters Controls */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+          <span>Date Range:</span>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+            className="px-2.5 py-1.5 border border-slate-200 rounded-md text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+          <span>to</span>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+            className="px-2.5 py-1.5 border border-slate-200 rounded-md text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-600">Type:</span>
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as any)}
+            className="px-2.5 py-1.5 border border-slate-200 rounded-md text-xs font-semibold text-slate-700 bg-white">
+            <option value="ALL">All Order Types</option>
+            <option value="COD">COD Only</option>
+            <option value="NON-COD">Non-COD Only</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-600">Status:</span>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            className="px-2.5 py-1.5 border border-slate-200 rounded-md text-xs font-semibold text-slate-700 bg-white capitalize">
+            <option value="ALL">All Statuses</option>
+            {["pending","processing","shipped","delivered","returned","void"].map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        {selectedDate && (
+          <button onClick={() => setSelectedDate(null)}
+            className="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors ml-auto">
+            <span>Filter: {selectedDate}</span>
+            <X size={12} />
+          </button>
+        )}
+      </div>
+
+      {/* Daily Counts Calendar Bar / Cards */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+        <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
+          <span>Day-by-Day Activity Breakdown ({dailyCounts.length} days)</span>
+          <span>Range Total: <strong>{totalRangeCount} Parcels</strong> ({formatPKR(totalRangeSales)})</span>
+        </div>
+
+        {loadingCounts ? (
+          <div className="py-8 text-center text-xs text-slate-400">Loading daily parcel history...</div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+            {dailyCounts.map((item: any) => {
+              const isSelected = selectedDate === item.date;
+              const hasParcels = item.count > 0;
+              return (
+                <button
+                  key={item.date}
+                  onClick={() => setSelectedDate(isSelected ? null : item.date)}
+                  className={cn(
+                    "p-3 rounded-lg border text-left transition-all relative overflow-hidden group",
+                    isSelected ? "bg-indigo-600 text-white border-indigo-600 shadow-md ring-2 ring-indigo-600/30" :
+                    hasParcels ? "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-900" :
+                    "bg-slate-50/50 border-slate-100 text-slate-400 opacity-65 hover:opacity-100"
+                  )}
+                >
+                  <div className="text-[11px] font-mono font-medium opacity-80">{item.date}</div>
+                  <div className="mt-1 flex items-baseline justify-between">
+                    <span className="text-lg font-bold font-mono">{item.count}</span>
+                    <span className="text-[10px] font-semibold opacity-75">{hasParcels ? "parcels" : "zero"}</span>
+                  </div>
+                  {hasParcels && (
+                    <div className="text-[10px] font-mono font-medium mt-0.5 opacity-90 truncate">
+                      {formatPKR(item.sales)}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Parcel List for Selected Date or Range */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-[#0F172A]">
+              {selectedDate ? `Parcels for Date: ${selectedDate}` : `Parcels (${filteredOrders.length} records)`}
+            </h3>
+          </div>
+
+          <div className="w-full sm:w-64">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search Order #, Phone, Name, City..."
+              className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-sans"
+            />
+          </div>
+        </div>
+
+        {filteredOrders.length === 0 ? (
+          <div className="p-12 text-center text-[#94a3b8] text-sm">No parcels found for the selected date or search filter.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[750px]">
+              <thead className="bg-slate-50/80 border-b border-slate-200/60">
+                <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  <th className="text-left px-6 py-3">Order No</th>
+                  <th className="text-left px-6 py-3">Date</th>
+                  <th className="text-left px-6 py-3">Customer</th>
+                  <th className="text-left px-6 py-3">Type</th>
+                  <th className="text-right px-6 py-3">Amount</th>
+                  <th className="text-left px-6 py-3">Tracking / Courier</th>
+                  <th className="text-left px-6 py-3">Status</th>
+                  <th className="px-6 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredOrders.map(o => (
+                  <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 font-mono text-xs font-bold text-[#0F172A]">{o.id}</td>
+                    <td className="px-6 py-4 font-mono text-xs text-slate-500">{o.date}</td>
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate-900 text-xs">{o.customer}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{o.whatsapp} • {o.city}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase border",
+                        o.type === "COD" ? "bg-amber-50 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-800 border-blue-200"
+                      )}>
+                        {o.type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 font-mono text-sm font-bold text-[#0F172A] text-right">{formatPKR(o.amount)}</td>
+                    <td className="px-6 py-4">
+                      {o.trackingNo ? (
+                        <div>
+                          <span className="font-mono text-xs font-semibold text-indigo-600 block">{o.trackingNo}</span>
+                          <span className="text-[11px] text-slate-400 font-medium">{o.courier}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">No Tracking</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4"><StatusBadge status={o.status} /></td>
+                    <td className="px-6 py-4 text-right">
+                      <button onClick={() => onViewOrder(o.id)}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-md text-xs transition-colors">
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Login Screen Component ───────────────────────────────────────────────────
+
+function LoginScreen({ onLoginSuccess }: { onLoginSuccess: (user: any) => void }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) {
+      setError("Username and password are required");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username.trim(), password: password.trim() })
+      });
+
+      const data = await safeResponseJson(res);
+
+      if (res.ok && data?.authenticated) {
+        onLoginSuccess(data.user);
+      } else {
+        setError(data?.error || "Invalid username or password.");
+      }
+    } catch (err: any) {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 p-8 w-full max-w-md space-y-6">
+        <div className="text-center space-y-2">
+          <div className="w-12 h-12 bg-[#0F172A] text-[#D4AF37] font-serif font-black text-xl flex items-center justify-center rounded-xl mx-auto shadow-md">
+            HK
+          </div>
+          <h1 className="text-xl font-bold text-[#0F172A]">HK Fabric — ParcelERP</h1>
+          <p className="text-xs text-slate-500">Sign in to access parcel management system</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-700">Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="Enter username"
+              disabled={loading}
+              className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-700">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              disabled={loading}
+              className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 px-4 bg-[#0F172A] hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-md transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? "Authenticating..." : "Sign In"}
+          </button>
+        </form>
+
+        <div className="text-center border-t border-slate-100 pt-4 text-[11px] text-slate-400">
+          Single-User Secure Authentication • Powered by ParcelERP
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const queryClient = useQueryClient();
   const [screen, setScreenState] = useState<Screen>("dashboard");
+  const [authUser, setAuthUser] = useState<any>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => res.ok ? safeResponseJson(res) : null)
+      .then(data => {
+        if (data && data.authenticated) {
+          setAuthUser(data.user);
+        } else {
+          setAuthUser(null);
+        }
+      })
+      .catch(() => setAuthUser(null))
+      .finally(() => setAuthChecking(false));
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch(e) {}
+    setAuthUser(null);
+    queryClient.clear();
+  };
   
   const setScreen = (s: Screen) => {
     setScreenState(s);
@@ -3030,18 +4383,20 @@ export default function App() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<any>(null);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['orders'],
     queryFn: async () => {
       const res = await fetch('/api/orders');
-      if (!res.ok) throw new Error("Failed to fetch orders");
-      const data = await res.json();
+      const raw = (await safeResponseJson(res));
+      const data = Array.isArray(raw) ? raw : (raw?.orders || []);
       return data.map((o: any) => ({
         _id: o.id,
         id: o.orderNo,
         customer: o.customer?.name || "Unknown",
         whatsapp: o.customer?.phone || "",
+        altPhone: o.customer?.alternatePhone || "",
         city: o.customer?.city || "",
         address: o.customer?.address || "",
         amount: o.totalAmount,
@@ -3068,21 +4423,34 @@ export default function App() {
     queryFn: async () => {
       const res = await fetch('/api/activities');
       if (!res.ok) throw new Error("Failed to fetch activities");
-      return await res.json();
+      return (await safeResponseJson(res)) || [];
     }
   });
 
+  const [globalToast, setGlobalToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+
+  const showGlobalToast = (message: string, type: "success" | "error" | "info" = "success") => {
+    setGlobalToast({ message, type });
+    setTimeout(() => {
+      setGlobalToast(null);
+    }, 3500);
+  };
+
   const createOrderMut = useMutation({
-    mutationFn: async (newOrder: Order) => {
+    mutationFn: async (params: Order | { newOrder: Order; overrideDuplicate?: boolean }) => {
+      const newOrder = 'newOrder' in params ? params.newOrder : params;
+      const overrideDuplicate = 'overrideDuplicate' in params ? Boolean(params.overrideDuplicate) : false;
+
       if (!navigator.onLine) {
         saveOrderOffline(newOrder);
         return "offline";
       }
       const payload = {
-        orderNo: newOrder.id,
+        orderNo: newOrder.id && newOrder.id.startsWith("HKF-") && orders.some(o => o.id === newOrder.id) ? newOrder.id : undefined,
         customerDetails: {
           phone: newOrder.whatsapp,
           name: newOrder.customer,
+          alternatePhone: newOrder.altPhone,
           city: newOrder.city,
           address: newOrder.address,
         },
@@ -3098,43 +4466,103 @@ export default function App() {
           unitPrice: p.price,
           lineTotal: p.qty * p.price
         })),
-        notes: newOrder.notes
+        notes: newOrder.notes,
+        overrideDuplicate,
       };
+
+      const idempotencyKey = `order-${newOrder.id}-${newOrder.whatsapp}-${newOrder.amount}`;
       
       try {
         const res = await fetch('/api/orders', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-idempotency-key': idempotencyKey
+          },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error("Failed to create order");
+
+        if (res.status === 409) {
+          const data = await safeResponseJson(res);
+          if (data?.duplicate) {
+            setDuplicateWarning({
+              ...data.existingOrder,
+              newOrderPayload: newOrder
+            });
+            showGlobalToast(`⚠️ Duplicate Parcel Alert: ${data.error || "An identical order exists for this customer!"}`, "error");
+            throw new Error(data.error || "Possible duplicate parcel detected");
+          }
+        }
+
+        if (!res.ok) {
+          const errData = await safeResponseJson(res);
+          throw new Error(errData?.error || "Failed to create order");
+        }
+
         return "online";
-      } catch (err) {
+      } catch (err: any) {
+        if (err.message && err.message.includes("duplicate")) {
+          throw err;
+        }
         saveOrderOffline(newOrder);
         return "offline";
       }
     },
     onSuccess: (status) => {
-      if (status === "online") queryClient.invalidateQueries({ queryKey: ['orders'] });
+      if (status === "online") {
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+        queryClient.invalidateQueries({ queryKey: ['stats'] });
+        queryClient.invalidateQueries({ queryKey: ['activities'] });
+        showGlobalToast("Order created successfully!", "success");
+      } else {
+        showGlobalToast("Order saved offline!", "info");
+      }
+    },
+    onError: (err: any) => {
+      if (!err.message?.includes("duplicate")) {
+        showGlobalToast(err.message || "Error creating order", "error");
+      }
     }
   });
 
+  const [duplicateTrackingWarning, setDuplicateTrackingWarning] = useState<any>(null);
+
   const updateOrderMut = useMutation({
     mutationFn: async ({ id, data }: { id: string, data: any }) => {
-      const dbId = orders.find((o: any) => o.id === id)?._id;
-      if (!dbId) throw new Error("Order not found");
+      const dbId = orders.find((o: any) => o.id === id || o._id === id)?._id || id;
       const res = await fetch(`/api/orders/${dbId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
+
+      if (res.status === 409) {
+        const errorData = await safeResponseJson(res);
+        if (errorData?.duplicateTracking) {
+          setDuplicateTrackingWarning({
+            trackingNo: data.trackingNumber || data.trackingNumber2,
+            ...errorData.existingOrder
+          });
+          throw new Error(errorData.error || "Tracking number already assigned");
+        }
+      }
+
       if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
+        const errorData = await safeResponseJson(res);
         throw new Error(errorData?.error || "Failed to update order");
       }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
-    onError: (err: any) => alert(err.message)
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+      showGlobalToast("Order updated successfully!", "success");
+    },
+    onError: (err: any) => {
+      if (!err.message?.includes("already assigned")) {
+        showGlobalToast(err.message || "Failed to update order", "error");
+      }
+    }
   });
 
   const handleViewOrder = (id: string) => {
@@ -3219,11 +4647,42 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!mounted) return null;
+  if (!mounted || authChecking) {
+    return (
+      <div className="min-h-screen bg-[#0F172A] flex items-center justify-center">
+        <div className="text-white text-sm font-medium flex items-center gap-3">
+          <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          <span>Verifying authentication...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return <LoginScreen onLoginSuccess={(u) => setAuthUser(u)} />;
+  }
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC] overflow-hidden">
-      <Sidebar
+    <div className="flex h-screen bg-[#F8FAFC] overflow-hidden relative">
+      {/* Global Toast Notification Overlay */}
+      {globalToast && (
+        <div className={cn(
+          "fixed top-4 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl border flex items-center gap-3 text-xs font-semibold animate-bounce transition-all",
+          globalToast.type === "success" && "bg-emerald-950 text-emerald-100 border-emerald-700",
+          globalToast.type === "error" && "bg-rose-950 text-rose-100 border-rose-700",
+          globalToast.type === "info" && "bg-[#0F172A] text-white border-slate-700"
+        )}>
+          {globalToast.type === "success" && <CheckCircle2 size={18} className="text-emerald-400 flex-shrink-0" />}
+          {globalToast.type === "error" && <AlertCircle size={18} className="text-rose-400 flex-shrink-0" />}
+          {globalToast.type === "info" && <AlertCircle size={18} className="text-[#D4AF37] flex-shrink-0" />}
+          <span>{globalToast.message}</span>
+          <button onClick={() => setGlobalToast(null)} className="ml-2 text-slate-400 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      <SidebarMemo
         screen={screen}
         setScreen={s => { setScreen(s); setSidebarOpen(false); }}
         open={sidebarOpen}
@@ -3251,9 +4710,11 @@ export default function App() {
           </div>
         )}
 
-        <Header
+        <HeaderMemo
           onMenuClick={() => setSidebarOpen(true)}
           onSearchClick={() => setSearchOpen(true)}
+          onLogout={handleLogout}
+          user={authUser}
         />
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {screen === "dashboard" && (
@@ -3272,6 +4733,25 @@ export default function App() {
               clearEditId={() => setSelectedOrderId(null)}
             />
           )}
+          {screen === "cod-parcels" && (
+            <CODParcelsScreen
+              setScreen={setScreen}
+              onViewOrder={handleViewOrder}
+              onEditOrder={handleEditOrder}
+              onVoidOrder={handleVoidOrder}
+              onUpdateStatus={handleUpdateStatus}
+              onReceiveCOD={handleReceiveCOD}
+            />
+          )}
+          {screen === "non-cod-parcels" && (
+            <NonCODParcelsScreen
+              setScreen={setScreen}
+              onViewOrder={handleViewOrder}
+              onEditOrder={handleEditOrder}
+              onVoidOrder={handleVoidOrder}
+              onUpdateStatus={handleUpdateStatus}
+            />
+          )}
           {screen === "orders" && (
             <OrdersScreen
               setScreen={setScreen}
@@ -3279,13 +4759,20 @@ export default function App() {
               onEditOrder={handleEditOrder}
               orders={orders}
               onVoidOrder={handleVoidOrder}
+              onUpdateStatus={handleUpdateStatus}
             />
           )}
           {screen === "order-detail" && <OrderDetailScreen orderId={selectedOrderId} setScreen={setScreen} orders={orders} />}
           {screen === "tracking" && <TrackingScreen orders={orders} onSaveTracking={handleSaveTracking} onUpdateStatus={handleUpdateStatus} />}
           {screen === "cod" && <CODScreen orders={orders} onReceiveCOD={handleReceiveCOD} />}
           {screen === "settlements" && <SettlementsScreen />}
-          {screen === "reports" && <ReportsScreen orders={orders} />}
+          {screen === "daily-history" && (
+            <DailyParcelHistoryScreen
+              setScreen={setScreen}
+              onViewOrder={handleViewOrder}
+              orders={orders}
+            />
+          )}
           {screen === "daily-closing" && <DailyClosingScreen orders={orders} />}
           {screen === "activity-log" && <ActivityLogScreen activityLogs={activityLogs} />}
           {screen === "settings" && <SettingsScreen />}
@@ -3299,6 +4786,109 @@ export default function App() {
         setSelectedOrderId={setSelectedOrderId}
         orders={orders}
       />
+
+      {duplicateWarning && (
+        <Modal open={Boolean(duplicateWarning)} onClose={() => setDuplicateWarning(null)} title="⚠ Possible Duplicate Parcel">
+          <div className="space-y-4 font-sans">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
+              <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">An identical parcel was recently created for this customer!</span>
+                Please review the existing order details below before proceeding.
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2 font-mono">
+              <div className="flex justify-between"><span className="text-slate-400">Order #:</span><span className="font-bold text-[#0F172A]">{duplicateWarning.orderNo}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Customer:</span><span className="font-medium text-slate-800">{duplicateWarning.customer}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Phone:</span><span>{duplicateWarning.phone}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Address:</span><span className="text-right max-w-[200px] truncate">{duplicateWarning.address}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Amount:</span><span className="font-bold text-[#D4AF37]">{formatPKR(duplicateWarning.totalAmount)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Created At:</span><span>{new Date(duplicateWarning.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                onClick={() => {
+                  const orderId = duplicateWarning.orderNo;
+                  setDuplicateWarning(null);
+                  handleViewOrder(orderId);
+                }}
+                className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition-colors"
+              >
+                View Existing Order
+              </button>
+              
+              <button
+                onClick={async () => {
+                  if (!duplicateWarning.newOrderPayload) return;
+                  const payloadToForce = duplicateWarning.newOrderPayload;
+                  setDuplicateWarning(null);
+                  try {
+                    await createOrderMut.mutateAsync({ newOrder: payloadToForce, overrideDuplicate: true });
+                    setScreen("orders");
+                  } catch (err: any) {
+                    alert(err.message || "Failed to create order");
+                  }
+                }}
+                className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow-sm transition-colors"
+              >
+                Confirm & Create Anyway
+              </button>
+
+              <button
+                onClick={() => setDuplicateWarning(null)}
+                className="py-2 px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-medium rounded-lg text-xs transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {duplicateTrackingWarning && (
+        <Modal open={Boolean(duplicateTrackingWarning)} onClose={() => setDuplicateTrackingWarning(null)} title="⚠ Duplicate Tracking Number Warning">
+          <div className="space-y-4 font-sans">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2">
+              <AlertTriangle size={18} className="text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Tracking Number Already Exists!</span>
+                This tracking number is already assigned to another parcel and cannot be assigned again.
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2 font-mono">
+              <div className="flex justify-between"><span className="text-slate-400">Tracking No:</span><span className="font-bold text-[#0F172A]">{duplicateTrackingWarning.trackingNo}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Assigned Order #:</span><span className="font-bold text-indigo-600">{duplicateTrackingWarning.orderNo}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Customer:</span><span className="font-medium text-slate-800">{duplicateTrackingWarning.customer}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Phone:</span><span>{duplicateTrackingWarning.phone}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Courier:</span><span className="font-bold">{duplicateTrackingWarning.courier}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Current Status:</span><StatusBadge status={duplicateTrackingWarning.status} /></div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                onClick={() => {
+                  const orderId = duplicateTrackingWarning.orderNo;
+                  setDuplicateTrackingWarning(null);
+                  handleViewOrder(orderId);
+                }}
+                className="flex-1 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs shadow-sm transition-colors"
+              >
+                View Existing Order
+              </button>
+
+              <button
+                onClick={() => setDuplicateTrackingWarning(null)}
+                className="py-2 px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-medium rounded-lg text-xs transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

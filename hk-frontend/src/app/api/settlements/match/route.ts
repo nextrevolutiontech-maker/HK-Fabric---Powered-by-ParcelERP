@@ -1,25 +1,41 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
-    const { trackingNumbers } = await request.json();
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const clientIp = getClientIp(request);
+    const limiter = rateLimit(`settlement-match:${clientIp}`, 20, 60 * 1000);
+    if (!limiter.success) {
+      return NextResponse.json({ error: 'Rate limit exceeded for settlement matching.' }, { status: 429 });
+    }
+
+    const rawBody = await request.text();
+    const body = rawBody ? JSON.parse(rawBody) : {};
+    const trackingNumbers = body.trackingNumbers;
 
     if (!trackingNumbers || !Array.isArray(trackingNumbers)) {
       return NextResponse.json({ error: 'trackingNumbers array is required' }, { status: 400 });
     }
 
-    // Clean tracking numbers (trim, uppercase)
-    const cleanedNumbers = trackingNumbers.map(t => t.trim().toUpperCase());
+    if (trackingNumbers.length > 500) {
+      return NextResponse.json({ error: 'Maximum 500 tracking numbers allowed per scan.' }, { status: 400 });
+    }
 
-    // Fetch all tracking entries since we need to do fuzzy/suffix matching
+    const cleanedNumbers = trackingNumbers.filter(t => typeof t === 'string' && t.trim().length > 0).map(t => t.trim().toUpperCase());
+
     const allEntries = await prisma.trackingEntry.findMany({
       include: {
         order: true
       }
     });
 
-    // Helper for Levenshtein distance
     function getEditDistance(a: string, b: string) {
       if (a.length === 0) return b.length;
       if (b.length === 0) return a.length;
@@ -42,15 +58,11 @@ export async function POST(request: Request) {
       return matrix[b.length][a.length];
     }
 
-    // Construct response matching what frontend preview needs
     const assignedIds = new Set<string>();
     
-    // First Pass: Exact and Suffix Matches
     const firstPass = cleanedNumbers.map(tracking => {
-      // 1. Exact Match
       let match = allEntries.find(e => e.trackingNumber.toUpperCase() === tracking && !assignedIds.has(e.id));
       
-      // 2. Suffix Match or Missing hyphen Match
       if (!match && tracking.length >= 8) {
         match = allEntries.find(e => {
           if (assignedIds.has(e.id)) return false;
@@ -65,11 +77,9 @@ export async function POST(request: Request) {
       return { tracking, match, pass: 1 };
     });
 
-    // Second Pass: Fuzzy Match for unmatched
     const result = firstPass.map(item => {
       let { tracking, match } = item;
 
-      // 3. Fuzzy Match
       if (!match && tracking.length >= 10) {
         let bestDistance = Infinity;
         let bestMatch = null;
@@ -106,9 +116,9 @@ export async function POST(request: Request) {
       }
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({ preview: result });
   } catch (error) {
-    console.error('Error matching settlements:', error);
-    return NextResponse.json({ error: 'Failed to match tracking numbers' }, { status: 500 });
+    console.error('Error matching settlement tracking numbers:', error);
+    return NextResponse.json({ error: 'Failed to process settlement matching' }, { status: 500 });
   }
 }
