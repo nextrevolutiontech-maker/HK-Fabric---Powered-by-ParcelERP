@@ -846,16 +846,54 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
         </div>
       </div>
 
-      {/* ─── 3. Primary KPI Row (4 Key Financial & Operational Metric Cards) ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Sales Revenue - Financial Highlight */}
+      {/* ─── 3. Dedicated Sales Revenue Breakdown Row (COD Sales, Non-COD Sales, Grand Total Sales) ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* COD Sales Card */}
+        <div className="bg-white p-5 rounded-2xl border border-emerald-200 shadow-sm flex flex-col justify-between bg-gradient-to-b from-emerald-50/30 to-white group hover:border-emerald-300 transition-colors">
+          <div>
+            <div className="flex items-center justify-between text-emerald-800 text-xs font-bold uppercase tracking-wider">
+              <span>COD Sales Revenue</span>
+              <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
+                <Banknote size={16} />
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-700 mt-3">
+              {formatPKR(codSales)}
+            </div>
+          </div>
+          <div className="text-[11px] text-emerald-800 font-mono mt-3 border-t border-emerald-100 pt-2 flex items-center justify-between">
+            <span>{codCount} COD Parcels</span>
+            <button onClick={() => setScreen("cod-parcels")} className="font-bold text-emerald-700 hover:underline">View COD →</button>
+          </div>
+        </div>
+
+        {/* Non-COD Sales Card */}
+        <div className="bg-white p-5 rounded-2xl border border-indigo-200 shadow-sm flex flex-col justify-between bg-gradient-to-b from-indigo-50/30 to-white group hover:border-indigo-300 transition-colors">
+          <div>
+            <div className="flex items-center justify-between text-indigo-800 text-xs font-bold uppercase tracking-wider">
+              <span>Non-COD Sales Revenue</span>
+              <span className="p-1.5 rounded-lg bg-indigo-100 text-indigo-800">
+                <Package size={16} />
+              </span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-indigo-700 mt-3">
+              {formatPKR(nonCodSales)}
+            </div>
+          </div>
+          <div className="text-[11px] text-indigo-800 font-mono mt-3 border-t border-indigo-100 pt-2 flex items-center justify-between">
+            <span>{nonCodCount} Prepaid Parcels</span>
+            <button onClick={() => setScreen("non-cod-parcels")} className="font-bold text-indigo-700 hover:underline">View Non-COD →</button>
+          </div>
+        </div>
+
+        {/* Grand Total Sales Revenue - Financial Highlight */}
         <div className="bg-[#0F172A] text-white p-5 rounded-2xl border border-slate-800 shadow-md flex flex-col justify-between relative overflow-hidden group">
           <div className="absolute -right-3 -bottom-3 text-slate-800/40 opacity-30 group-hover:scale-110 transition-transform">
             <DollarSign size={90} />
           </div>
           <div>
             <div className="flex items-center justify-between text-slate-400 text-xs font-semibold uppercase tracking-wider">
-              <span>Total Sales Revenue</span>
+              <span>Grand Total Sales</span>
               <span className="p-1.5 rounded-lg bg-amber-500/10 text-[#D4AF37]">
                 <TrendingUp size={14} />
               </span>
@@ -864,64 +902,45 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
               {formatPKR(totalSales)}
             </div>
           </div>
-          <div className="text-[11px] text-slate-400 font-mono mt-3 border-t border-slate-800/80 pt-2">
-            Grand total across all parcels
+          <div className="text-[11px] text-slate-400 font-mono mt-3 border-t border-slate-800/80 pt-2 flex items-center justify-between">
+            <span>{totalCount} Total Parcels</span>
+            <span className="text-[#D4AF37] font-bold">100% Reconciled</span>
           </div>
         </div>
+      </div>
 
+      {/* ─── 4. Secondary Operational Metrics (Pending COD, Received COD, Total Volume) ─── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Total Parcels Volume */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between group hover:border-slate-300 transition-colors">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
-              <span>Total Parcels</span>
-              <span className="p-1.5 rounded-lg bg-slate-100 text-slate-700">
-                <Box size={14} />
-              </span>
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-[#0F172A] mt-3">
-              {totalCount.toLocaleString()}
-            </div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Parcels Volume</span>
+            <span className="text-xl font-extrabold font-mono text-[#0F172A]">{totalCount.toLocaleString()}</span>
           </div>
-          <div className="text-[11px] text-slate-500 font-mono mt-3 border-t border-slate-100 pt-2 flex items-center justify-between">
-            <span>{codCount} COD</span>
-            <span className="text-slate-300">•</span>
-            <span>{nonCodCount} Non-COD</span>
+          <div className="p-2 bg-slate-100 text-slate-700 rounded-lg">
+            <Box size={18} />
           </div>
         </div>
 
         {/* Pending COD Cash */}
-        <div className="bg-white p-5 rounded-2xl border border-amber-200/80 shadow-sm flex flex-col justify-between bg-gradient-to-b from-amber-50/20 to-white group hover:border-amber-300 transition-colors">
+        <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-sm flex items-center justify-between bg-amber-50/20">
           <div>
-            <div className="flex items-center justify-between text-amber-700 text-xs font-bold uppercase tracking-wider">
-              <span>Pending COD</span>
-              <span className="p-1.5 rounded-lg bg-amber-100 text-amber-800">
-                <Clock size={14} />
-              </span>
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-amber-700 mt-3">
-              {formatPKR(pendingCOD)}
-            </div>
+            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">Pending COD Cash</span>
+            <span className="text-xl font-extrabold font-mono text-amber-700">{formatPKR(pendingCOD)}</span>
           </div>
-          <div className="text-[11px] text-amber-800 font-mono mt-3 border-t border-amber-100 pt-2">
-            Cash to be collected by couriers
+          <div className="p-2 bg-amber-100 text-amber-800 rounded-lg">
+            <Clock size={18} />
           </div>
         </div>
 
         {/* Received COD Cash */}
-        <div className="bg-white p-5 rounded-2xl border border-emerald-200/80 shadow-sm flex flex-col justify-between bg-gradient-to-b from-emerald-50/20 to-white group hover:border-emerald-300 transition-colors">
+        <div className="bg-white p-4 rounded-xl border border-emerald-200 shadow-sm flex items-center justify-between bg-emerald-50/20">
           <div>
-            <div className="flex items-center justify-between text-emerald-700 text-xs font-bold uppercase tracking-wider">
-              <span>Received COD</span>
-              <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
-                <CheckCircle2 size={14} />
-              </span>
-            </div>
-            <div className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-700 mt-3">
-              {formatPKR(receivedCOD)}
-            </div>
+            <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Received COD Cash</span>
+            <span className="text-xl font-extrabold font-mono text-emerald-700">{formatPKR(receivedCOD)}</span>
           </div>
-          <div className="text-[11px] text-emerald-800 font-mono mt-3 border-t border-emerald-100 pt-2">
-            Bank accounts reconciled
+          <div className="p-2 bg-emerald-100 text-emerald-800 rounded-lg">
+            <CheckCircle2 size={18} />
           </div>
         </div>
       </div>
