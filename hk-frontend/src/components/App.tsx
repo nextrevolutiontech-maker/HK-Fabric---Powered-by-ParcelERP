@@ -326,12 +326,24 @@ const SidebarMemo = memo(Sidebar);
 
 // ─── Top Navbar Header ─────────────────────────────────────────────────────────
 
-function Header({ screen, setScreen, onSearchClick, onLogout, user }: { 
+function Header({ 
+  screen, 
+  setScreen, 
+  onSearchClick, 
+  onLogout, 
+  user,
+  offlineOrdersCount = 0,
+  isOffline = false,
+  onSyncClick
+}: { 
   screen: Screen;
   setScreen: (s: Screen) => void;
   onSearchClick: () => void; 
   onLogout: () => void;
   user: any;
+  offlineOrdersCount?: number;
+  isOffline?: boolean;
+  onSyncClick?: () => void;
 }) {
   const [time, setTime] = useState<Date | null>(null);
   useEffect(() => {
@@ -398,6 +410,23 @@ function Header({ screen, setScreen, onSearchClick, onLogout, user }: {
 
         {/* Right Utility Stack */}
         <div className="flex items-center gap-3 ml-auto">
+          {/* Offline Indicator / Sync Now Pill */}
+          {isOffline ? (
+            <div className="flex items-center gap-1.5 text-xs font-bold bg-amber-500/10 text-amber-800 border border-amber-300/80 px-3 py-1.5 rounded-xl animate-pulse">
+              <AlertCircle size={14} className="text-amber-600" />
+              <span>Offline Mode</span>
+            </div>
+          ) : offlineOrdersCount > 0 && onSyncClick && (
+            <button
+              onClick={onSyncClick}
+              className="flex items-center gap-1.5 text-xs font-extrabold bg-amber-500 text-slate-950 hover:bg-amber-400 px-3 py-1.5 rounded-xl shadow-md transition-all animate-bounce"
+              title="Click to push offline orders to PostgreSQL database"
+            >
+              <Upload size={14} />
+              <span>Sync Now ({offlineOrdersCount})</span>
+            </button>
+          )}
+
           {installPrompt && (
             <button
               onClick={handleInstallApp}
@@ -619,6 +648,85 @@ function GlobalSearch({ open, onClose, setScreen, setSelectedOrderId, orders }: 
 }
 
 // ─── Dashboard Screen ─────────────────────────────────────────────────────────
+
+// ─── Offline Orders Reconnection Sync Modal ─────────────────────────────────────
+
+function OfflineSyncModal({
+  open,
+  offlineOrders,
+  isSyncing,
+  onSync,
+  onClose,
+}: {
+  open: boolean;
+  offlineOrders: Order[];
+  isSyncing: boolean;
+  onSync: () => void;
+  onClose: () => void;
+}) {
+  if (!open || offlineOrders.length === 0) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-white rounded-2xl shadow-2xl border border-amber-200 max-w-md w-full overflow-hidden animate-scaleIn">
+        {/* Header */}
+        <div className="bg-[#0F172A] px-6 py-4 text-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-[#D4AF37] flex items-center justify-center font-bold">
+              <Upload size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-white">Internet Connection Restored!</h3>
+              <p className="text-xs text-slate-300">Sync offline orders to PostgreSQL database</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-4">
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 font-medium">
+            Internet is back online! You created <strong>{offlineOrders.length} {offlineOrders.length === 1 ? 'order' : 'orders'}</strong> locally during internet outage / load-shedding. Click below to push them directly to the database.
+          </div>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-40 overflow-y-auto space-y-1.5 font-mono text-xs">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 font-sans">Pending Offline Queue ({offlineOrders.length})</div>
+            {offlineOrders.map((o, i) => (
+              <div key={o.id || i} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-200/80">
+                <span className="font-bold text-[#0F172A]">{o.id}</span>
+                <span className="text-slate-600 font-sans truncate max-w-[120px]">{o.customer}</span>
+                <span className="font-bold text-emerald-700">{formatPKR(o.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors"
+          >
+            Sync Later
+          </button>
+          <button
+            onClick={onSync}
+            disabled={isSyncing}
+            className="px-5 py-2.5 text-xs font-extrabold text-white bg-[#0F172A] hover:bg-[#1E293B] rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            {isSyncing ? (
+              <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Syncing Database...</>
+            ) : (
+              <><Upload size={15} className="text-[#D4AF37]" /> Sync {offlineOrders.length} Orders Now</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Duplicate Order Warning Modal ─────────────────────────────────────────────
 
@@ -4853,10 +4961,11 @@ export default function App() {
   
   const [mounted, setMounted] = useState(false);
   
-  // Offline State
+  // Offline State & Reconnection Modal
   const [isOffline, setIsOffline] = useState(false);
   const [offlineOrders, setOfflineOrders] = useState<Order[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -4883,11 +4992,32 @@ export default function App() {
       setIsOffline(!navigator.onLine);
       const savedOffline = localStorage.getItem("offline_orders");
       if (savedOffline) {
-        try { setOfflineOrders(JSON.parse(savedOffline)); } catch(e) {}
+        try { 
+          const parsed = JSON.parse(savedOffline);
+          setOfflineOrders(parsed); 
+          if (Array.isArray(parsed) && parsed.length > 0 && navigator.onLine) {
+            setShowSyncModal(true);
+          }
+        } catch(e) {}
       }
 
-      const handleOnline = () => setIsOffline(false);
-      const handleOffline = () => setIsOffline(true);
+      const handleOnline = () => {
+        setIsOffline(false);
+        const currentSaved = localStorage.getItem("offline_orders");
+        if (currentSaved) {
+          try {
+            const parsed = JSON.parse(currentSaved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setShowSyncModal(true);
+              showGlobalToast(`🌐 Internet restored! ${parsed.length} offline orders ready to sync.`, "info");
+            }
+          } catch(e) {}
+        }
+      };
+      const handleOffline = () => {
+        setIsOffline(true);
+        showGlobalToast("⚡ Offline Mode: Internet disconnected. Orders will be saved locally.", "error");
+      };
       window.addEventListener("online", handleOnline);
       window.addEventListener("offline", handleOffline);
       return () => {
@@ -5279,6 +5409,17 @@ export default function App() {
         onSearchClick={() => setSearchOpen(true)}
         onLogout={handleLogout}
         user={authUser}
+        offlineOrdersCount={offlineOrders.length}
+        isOffline={isOffline}
+        onSyncClick={() => setShowSyncModal(true)}
+      />
+
+      <OfflineSyncModal
+        open={showSyncModal}
+        offlineOrders={offlineOrders}
+        isSyncing={isSyncing}
+        onSync={() => syncOfflineOrders()}
+        onClose={() => setShowSyncModal(false)}
       />
 
       <div className="flex flex-col flex-1 min-w-0">
