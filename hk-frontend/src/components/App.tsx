@@ -3692,11 +3692,11 @@ function CODScreen({ orders, onReceiveCOD }: { orders: Order[]; onReceiveCOD: (i
   const [recDate, setRecDate] = useState("2026-06-20");
   const [receivedIds, setReceivedIds] = useState<Set<string>>(new Set());
 
-  const pending = orders.filter(o => o.codStatus === "pending" && o.status === "delivered" && !receivedIds.has(o.id));
-  const receivedList = orders.filter(o => o.codStatus === "received" || receivedIds.has(o.id));
+  const pending = orders.filter(o => o.type !== "NON-COD" && o.amount > 0 && o.codStatus === "pending" && o.status === "delivered" && !receivedIds.has(o.id));
+  const receivedList = orders.filter(o => o.type !== "NON-COD" && o.amount > 0 && (o.codStatus === "received" || receivedIds.has(o.id)));
   const pendingAmt = pending.reduce((a, b) => a + b.amount, 0);
   const receivedAmt = receivedList.reduce((a, b) => a + b.amount, 0);
-  const totalCOD = orders.filter(o => o.type === "COD").reduce((a, b) => a + b.amount, 0);
+  const totalCOD = orders.filter(o => o.type !== "NON-COD" && o.amount > 0).reduce((a, b) => a + b.amount, 0);
   const selectedOrder = orders.find(o => o.id === receiveModal);
 
   const handleReceive = () => {

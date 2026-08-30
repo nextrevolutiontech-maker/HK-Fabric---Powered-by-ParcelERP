@@ -100,6 +100,9 @@ export const OrderService = {
 
     if (orderType && orderType !== 'all' && orderType !== 'ALL') {
       where.orderType = orderType.toUpperCase();
+      if (orderType.toUpperCase() === 'COD') {
+        where.totalAmount = { gt: 0 };
+      }
     }
 
     if (status && status !== 'all' && status !== 'ALL') {
