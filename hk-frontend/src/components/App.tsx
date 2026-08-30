@@ -5044,10 +5044,11 @@ export default function App() {
     
     for (const order of offlineOrders) {
       const payload = {
-        orderNo: order.id,
+        orderNo: order.id && order.id.startsWith("HKF-") && !orders.some(o => o.id === order.id) ? order.id : undefined,
         customerDetails: {
           phone: order.whatsapp,
           name: order.customer,
+          alternatePhone: order.altPhone,
           city: order.city,
           address: order.address,
         },
@@ -5063,7 +5064,8 @@ export default function App() {
           unitPrice: p.price,
           lineTotal: p.qty * p.price
         })),
-        notes: order.notes
+        notes: order.notes,
+        overrideDuplicate: true,
       };
 
       try {
@@ -5072,22 +5074,28 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error("Failed");
+        const responseData = await safeResponseJson(res);
+        if (!res.ok) {
+          throw new Error(responseData?.error || `HTTP ${res.status}`);
+        }
         syncedCount++;
-      } catch (e) {
+      } catch (e: any) {
         failed.push(order);
+        showGlobalToast(`Order #${order.id} sync error: ${e.message || "Bad Request"}`, "error");
       }
     }
     
     setOfflineOrders(failed);
     localStorage.setItem("offline_orders", JSON.stringify(failed));
     queryClient.invalidateQueries({ queryKey: ['orders'] });
+    queryClient.invalidateQueries({ queryKey: ['stats'] });
     setIsSyncing(false);
+    setShowSyncModal(false);
     
     if (failed.length === 0) {
-      alert(`Successfully synced ${syncedCount} orders to the database!`);
+      showGlobalToast(`🎉 Successfully synced ${syncedCount} offline orders to PostgreSQL database!`, "success");
     } else {
-      alert(`Synced ${syncedCount} orders. ${failed.length} failed and remain in queue.`);
+      showGlobalToast(`Synced ${syncedCount} orders. ${failed.length} remaining in offline queue.`, "error");
     }
   };
 
