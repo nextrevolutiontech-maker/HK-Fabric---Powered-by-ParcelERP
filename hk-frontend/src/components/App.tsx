@@ -324,10 +324,11 @@ function Sidebar({ screen, setScreen, open, onClose }: {
 }
 const SidebarMemo = memo(Sidebar);
 
-// ─── Header ───────────────────────────────────────────────────────────────────
+// ─── Top Navbar Header ─────────────────────────────────────────────────────────
 
-function Header({ onMenuClick, onSearchClick, onLogout, user }: { 
-  onMenuClick: () => void; 
+function Header({ screen, setScreen, onSearchClick, onLogout, user }: { 
+  screen: Screen;
+  setScreen: (s: Screen) => void;
   onSearchClick: () => void; 
   onLogout: () => void;
   user: any;
@@ -363,78 +364,119 @@ function Header({ onMenuClick, onSearchClick, onLogout, user }: {
   };
 
   return (
-    <header className="bg-white border-b border-slate-100 px-4 lg:px-6 py-3 flex items-center gap-4 flex-shrink-0 z-30 sticky top-0 print:hidden">
-      <button onClick={onMenuClick} className="lg:hidden p-2 -ml-2 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-        <Menu size={20} />
-      </button>
-
-      <div className="flex items-center gap-2 flex-shrink-0 lg:hidden mr-1">
-        <div className="w-8 h-8 bg-[#0F172A] rounded-md flex items-center justify-center shadow-sm">
-          <Layers size={14} className="text-[#D4AF37]" />
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm print:hidden">
+      {/* Upper Brand & Utility Bar */}
+      <div className="px-4 lg:px-8 py-2.5 flex items-center justify-between gap-4 border-b border-slate-100">
+        {/* Brand Logo & Title */}
+        <div 
+          onClick={() => setScreen("dashboard")}
+          className="flex items-center gap-3 cursor-pointer group flex-shrink-0"
+        >
+          <div className="w-9 h-9 bg-[#0F172A] rounded-xl flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+            <Layers size={18} className="text-[#D4AF37]" />
+          </div>
+          <div>
+            <div className="font-extrabold text-[#0F172A] text-base tracking-tight leading-none flex items-center gap-2">
+              <span>HK FABRIC</span>
+              <span className="text-[10px] font-mono font-bold bg-[#D4AF37]/15 text-[#0F172A] px-2 py-0.5 rounded-md border border-[#D4AF37]/30">
+                COURIER ERP
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-400 font-medium">Bedsheets & Home Textiles Logistics</span>
+          </div>
         </div>
-        <span className="font-semibold text-[#0F172A] text-sm hidden sm:inline tracking-tight">HK Fabric</span>
+
+        {/* Global Search Quick Trigger */}
+        <button
+          onClick={onSearchClick}
+          className="hidden md:flex flex-1 max-w-sm items-center gap-2 px-3 py-1.5 bg-slate-100/70 hover:bg-slate-100 border border-slate-200/80 rounded-xl text-xs text-slate-500 transition-colors shadow-inner"
+        >
+          <Search size={14} className="text-slate-400" />
+          <span>Search orders, customer phone, tracking...</span>
+          <kbd className="ml-auto text-[10px] font-mono bg-white border border-slate-200 text-slate-400 rounded px-1.5 py-0.5 shadow-xs">⌘K</kbd>
+        </button>
+
+        {/* Right Utility Stack */}
+        <div className="flex items-center gap-3 ml-auto">
+          {installPrompt && (
+            <button
+              onClick={handleInstallApp}
+              className="flex items-center gap-1.5 text-[11px] font-bold bg-[#0F172A] text-white hover:bg-[#1E293B] px-3 py-1.5 rounded-xl transition-all shadow-sm"
+              title="Install HK Fabric PWA Desktop App"
+            >
+              <Download size={13} className="text-[#D4AF37]" />
+              <span className="hidden lg:inline">Install PWA</span>
+            </button>
+          )}
+
+          <div className="hidden xl:flex items-center gap-2">
+            <a 
+              href="https://postextracking.com.pk/" 
+              target="_blank" 
+              rel="noreferrer" 
+              className="text-[11px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-colors border border-indigo-100"
+            >
+              PostEx
+            </a>
+            <a 
+              href="https://ep.gov.pk/track.asp" 
+              target="_blank" 
+              rel="noreferrer" 
+              className="text-[11px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1 rounded-lg transition-colors border border-emerald-100"
+            >
+              Pak Post
+            </a>
+          </div>
+
+          <div className="hidden sm:flex flex-col items-end border-l border-slate-200 pl-3">
+            <span className="text-[10px] text-slate-400 leading-none">{dateStr}</span>
+            <span className="text-xs font-mono font-bold text-[#0F172A] mt-0.5 leading-none">{timeStr}</span>
+          </div>
+
+          {user && (
+            <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+              <div className="text-right hidden sm:block">
+                <div className="text-xs font-bold text-[#0F172A]">{user.username}</div>
+                <div className="text-[10px] text-slate-400 font-mono">Staff Admin</div>
+              </div>
+              <button
+                onClick={onLogout}
+                title="Logout"
+                className="p-1.5 sm:px-2.5 sm:py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-xs font-bold transition-colors border border-red-200 flex items-center gap-1"
+              >
+                <LogOut size={14} />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      <button
-        onClick={onSearchClick}
-        className="flex-1 max-w-md flex items-center gap-2 px-3 py-2 bg-slate-50/50 hover:bg-slate-100 border-0 rounded-md text-sm text-slate-500 transition-colors shadow-sm ring-1 ring-inset ring-slate-200/80 focus:outline-none focus:ring-2 focus:ring-[#0F172A]"
-      >
-        <Search size={16} className="text-slate-400" />
-        <span className="hidden sm:inline">Search orders, customers...</span>
-        <span className="sm:hidden">Search...</span>
-        <kbd className="hidden lg:inline-flex ml-auto text-[10px] font-medium font-mono bg-white border border-slate-200 text-slate-400 rounded-sm px-1.5 py-0.5 leading-none shadow-sm">⌘K</kbd>
-      </button>
-
-      <div className="ml-auto flex items-center gap-3">
-        {installPrompt && (
-          <button
-            onClick={handleInstallApp}
-            className="flex items-center gap-1.5 text-[11px] font-bold bg-[#0F172A] text-white hover:bg-[#1E293B] px-3 py-1.5 rounded-md transition-all shadow-sm ring-1 ring-white/10"
-            title="Install HK Fabric as Desktop/Mobile PWA App"
-          >
-            <Download size={14} className="text-[#D4AF37]" />
-            <span className="hidden sm:inline">Install PWA App</span>
-          </button>
-        )}
-        <div className="hidden md:flex items-center gap-2 mr-2">
-          <a 
-            href="https://postextracking.com.pk/" 
-            target="_blank" 
-            rel="noreferrer" 
-            className="text-[11px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1.5 rounded-md transition-colors border border-indigo-100 shadow-sm"
-          >
-            PostEx Tracking
-          </a>
-          <a 
-            href="https://ep.gov.pk/track.asp" 
-            target="_blank" 
-            rel="noreferrer" 
-            className="text-[11px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md transition-colors border border-emerald-100 shadow-sm"
-          >
-            Pak Post Tracking
-          </a>
-        </div>
-        <div className="hidden md:flex flex-col items-end">
-          <span className="text-[11px] text-slate-400 leading-none">{dateStr}</span>
-          <span className="text-sm font-mono font-semibold text-[#0F172A] mt-0.5 leading-none">{timeStr}</span>
-        </div>
-
-        {user && (
-          <div className="flex items-center gap-2 border-l border-slate-100 pl-3">
-            <div className="text-right hidden sm:block">
-              <div className="text-xs font-bold text-[#0F172A]">{user.username}</div>
-              <div className="text-[10px] text-slate-400">Authenticated</div>
-            </div>
+      {/* Main Top Navigation Category Bar */}
+      <div className="px-4 lg:px-8 py-2 bg-slate-50/80 flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+        {NAV.map(({ id, label, icon: Icon }) => {
+          const active = screen === id || (screen === "order-detail" && id === "orders");
+          return (
             <button
-              onClick={onLogout}
-              title="Logout"
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-semibold transition-colors shadow-sm border border-red-200"
+              key={id}
+              onClick={() => setScreen(id as Screen)}
+              className={cn(
+                "flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-shrink-0",
+                active 
+                  ? "bg-[#0F172A] text-white shadow-sm ring-1 ring-black/10" 
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+              )}
             >
-              <LogOut size={14} />
-              <span className="hidden sm:inline">Logout</span>
+              <Icon size={14} className={cn(active ? "text-[#D4AF37]" : "text-slate-400")} />
+              <span>{label}</span>
+              {id === "create-order" && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-md bg-[#D4AF37] text-[#0F172A] text-[10px] font-extrabold">
+                  +
+                </span>
+              )}
             </button>
-          </div>
-        )}
+          );
+        })}
       </div>
     </header>
   );
@@ -5212,7 +5254,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC] overflow-hidden relative">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col overflow-x-hidden relative">
       {/* Global Toast Notification Overlay */}
       {globalToast && (
         <div className={cn(
@@ -5231,14 +5273,15 @@ export default function App() {
         </div>
       )}
 
-      <SidebarMemo
+      <HeaderMemo
         screen={screen}
-        setScreen={s => { setScreen(s); setSidebarOpen(false); }}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        setScreen={setScreen}
+        onSearchClick={() => setSearchOpen(true)}
+        onLogout={handleLogout}
+        user={authUser}
       />
 
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0">
         {/* Offline Banner */}
         {(isOffline || offlineOrders.length > 0) && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between z-20 shadow-sm">
@@ -5259,13 +5302,7 @@ export default function App() {
           </div>
         )}
 
-        <HeaderMemo
-          onMenuClick={() => setSidebarOpen(true)}
-          onSearchClick={() => setSearchOpen(true)}
-          onLogout={handleLogout}
-          user={authUser}
-        />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main className="flex-1 p-4 lg:p-6 max-w-[1600px] w-full mx-auto">
           {screen === "dashboard" && (
             <DashboardScreen
               setScreen={setScreen}
