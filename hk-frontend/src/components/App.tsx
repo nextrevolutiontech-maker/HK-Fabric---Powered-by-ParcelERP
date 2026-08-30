@@ -1910,6 +1910,11 @@ function CreateOrderScreen({
       setErrorMsg("WhatsApp number is mandatory!");
       return;
     }
+    const cleanDigits = whatsapp.replace(/\D/g, "");
+    if (cleanDigits.length < 10) {
+      setErrorMsg("WhatsApp number must be a valid 10-11 digit phone number (e.g. 03001234567)!");
+      return;
+    }
     if (!customerName.trim()) {
       setErrorMsg("Customer Name is required!");
       return;
@@ -1966,8 +1971,9 @@ function CreateOrderScreen({
       if (shouldPrintAfter) {
         setShowPrint(true);
       }
-    } catch (e) {
+    } catch (e: any) {
       setIsSubmitting(false);
+      setErrorMsg(e.message || "Failed to create order. Please check inputs.");
       return;
     }
 
