@@ -50,6 +50,8 @@ export async function POST(request: Request) {
       prisma.settlement.deleteMany({}),
       prisma.order.deleteMany({}),
       prisma.customer.deleteMany({}),
+      prisma.activity.deleteMany({}),
+      prisma.idempotencyRecord.deleteMany({}),
     ]);
 
     return NextResponse.json({ success: true, message: 'All database entries have been reset to 0.' });
