@@ -441,7 +441,8 @@ export const OrderService = {
         const sameAmount = Math.abs(existing.totalAmount - calculatedTotalAmount) < 0.01;
         const sameItems = areItemsIdentical(items, existing.items);
         
-        if (sameAmount && sameItems) {
+        // Prevent duplicate orders for the same customer within 15 minutes (if same amount OR same items)
+        if (sameAmount || sameItems) {
           throw new DuplicateParcelError(
             `A duplicate order (#${existing.orderNo}) was recently created for ${existing.customer?.name || 'this customer'}.`,
             {
@@ -619,7 +620,7 @@ export const OrderService = {
     // Enforce Business Rule: Cannot mark order as Delivered/Shipped or COD Received without a Tracking Number
     const targetStatus = status ? status.toLowerCase() : existingOrder.status.toLowerCase();
     const targetCodStatus = codStatus ? codStatus.toLowerCase() : existingOrder.codStatus.toLowerCase();
-    const hasTrackingNumber = existingOrder.trackingEntries && existingOrder.trackingEntries.length > 0 && Boolean(existingOrder.trackingEntries[0]?.trackingNumber);
+    const hasTrackingNumber = Boolean(existingOrder.trackingEntries && existingOrder.trackingEntries.length > 0 && existingOrder.trackingEntries[0]?.trackingNumber);
     const isAddingTrackingNow = Boolean(trackingNumber && trackingNumber.trim());
 
     if ((targetStatus === 'delivered' || targetStatus === 'shipped' || targetCodStatus === 'received') && !hasTrackingNumber && !isAddingTrackingNow) {
@@ -632,7 +633,8 @@ export const OrderService = {
         throw new Error(`Cannot assign or edit tracking number on VOID Order #${existingOrder.orderNo}.`);
       }
 
-      if (existingOrder.status === 'delivered' || existingOrder.codStatus === 'RECEIVED') {
+      // Require PIN ONLY IF the order ALREADY has a tracking number assigned AND is marked delivered/received
+      if (hasTrackingNumber && (existingOrder.status === 'delivered' || existingOrder.codStatus === 'RECEIVED')) {
         const isPinValid = await verifyOwnerPin(pin);
         if (!isPinValid) {
           throw new Error(`Owner PIN is required to edit tracking for Order #${existingOrder.orderNo} (Status: ${existingOrder.status.toUpperCase()}).`);

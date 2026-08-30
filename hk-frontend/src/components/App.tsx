@@ -5032,6 +5032,16 @@ export default function App() {
     let syncedCount = 0;
     
     for (const order of offlineOrders) {
+      const isAlreadyInDb = orders.some((o: any) => 
+        (o.id === order.id || o.orderNo === order.id) ||
+        (o.whatsapp === order.whatsapp && Math.abs(o.amount - order.amount) < 0.01)
+      );
+
+      if (isAlreadyInDb) {
+        syncedCount++;
+        continue;
+      }
+
       const payload = {
         orderNo: order.id && order.id.startsWith("HKF-") && !orders.some(o => o.id === order.id) ? order.id : undefined,
         customerDetails: {
@@ -5054,7 +5064,6 @@ export default function App() {
           lineTotal: p.qty * p.price
         })),
         notes: order.notes,
-        overrideDuplicate: true,
       };
 
       try {
