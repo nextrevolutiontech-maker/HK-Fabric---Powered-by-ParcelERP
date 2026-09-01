@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { normalizePhone, normalizeText, normalizeTracking, areItemsIdentical } from '@/lib/normalization';
+import { normalizePhone, normalizeText, normalizeTracking, areItemsIdentical, getProvinceFromCity } from '@/lib/normalization';
 import { verifyOwnerPin, sanitizeOrderUpdateDto } from '@/lib/auth';
 
 export class DuplicateParcelError extends Error {
@@ -473,11 +473,16 @@ export const OrderService = {
     }
 
     const createdOrder = await prisma.$transaction(async (tx) => {
+      const targetProvince = (customerDetails.province && customerDetails.province.trim()) 
+        ? customerDetails.province.trim() 
+        : getProvinceFromCity(customerDetails.city);
+
       const customer = await tx.customer.upsert({
         where: { phone: normalizedPhone },
         update: {
           name: customerDetails.name.trim(),
           alternatePhone: customerDetails.alternatePhone ? normalizePhone(customerDetails.alternatePhone) : undefined,
+          province: targetProvince || undefined,
           city: customerDetails.city.trim(),
           address: customerDetails.address.trim(),
         },
@@ -485,6 +490,7 @@ export const OrderService = {
           phone: normalizedPhone,
           name: customerDetails.name.trim(),
           alternatePhone: customerDetails.alternatePhone ? normalizePhone(customerDetails.alternatePhone) : null,
+          province: targetProvince || null,
           city: customerDetails.city.trim(),
           address: customerDetails.address.trim(),
         }
@@ -715,11 +721,16 @@ export const OrderService = {
 
       if (!customerId && customerDetails && customerDetails.phone) {
         const normalizedPhone = normalizePhone(customerDetails.phone);
+        const targetProvince = (customerDetails.province && customerDetails.province.trim()) 
+          ? customerDetails.province.trim() 
+          : getProvinceFromCity(customerDetails.city);
+
         const customer = await tx.customer.upsert({
           where: { phone: normalizedPhone },
           update: {
             name: customerDetails.name,
             alternatePhone: customerDetails.alternatePhone ? normalizePhone(customerDetails.alternatePhone) : undefined,
+            province: targetProvince || undefined,
             city: customerDetails.city,
             address: customerDetails.address,
           },
@@ -727,6 +738,7 @@ export const OrderService = {
             phone: normalizedPhone,
             name: customerDetails.name,
             alternatePhone: customerDetails.alternatePhone ? normalizePhone(customerDetails.alternatePhone) : null,
+            province: targetProvince || null,
             city: customerDetails.city,
             address: customerDetails.address,
           }

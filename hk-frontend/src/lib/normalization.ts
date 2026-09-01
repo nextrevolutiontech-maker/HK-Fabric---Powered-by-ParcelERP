@@ -45,3 +45,24 @@ export function areItemsIdentical(itemsA: any[], itemsB: any[]): boolean {
     );
   });
 }
+
+export const PROVINCE_CITIES_MAP: Record<string, string[]> = {
+  "Punjab": ["Lahore", "Faisalabad", "Rawalpindi", "Multan", "Gujranwala", "Sargodha", "Bahawalpur", "Sialkot", "Sheikhupura", "Rahim Yar Khan", "Jhang", "Dera Ghazi Khan", "Gujrat", "Sahiwal", "Kasur", "Okara", "Chiniot", "Kamoke", "Hafizabad", "Sadiqabad", "Burewala", "Muzaffargarh", "Khanpur", "Gojra", "Bahawalnagar", "Muridke", "Pakpattan", "Jaranwala", "Chishtian", "Daska", "Mandi Bahauddin", "Ahmadpur East", "Kamalia", "Vehari", "Wazirabad", "Khushab", "Chakwal", "Mianwali", "Kot Adu", "Pindi Bhattian", "Sukheke"],
+  "Sindh": ["Karachi", "Hyderabad", "Sukkur", "Larkana", "Nawabshah", "Mirpur Khas", "Jacobabad", "Shikarpur", "Tando Adam", "Khairpur", "Dadu", "Tando Allahyar", "Kotri", "Thatta", "Badin", "Ghotki", "Kashmore", "Umerkot", "Matiari", "Shahdadkot", "Shadadkot"],
+  "Khyber Pakhtunkhwa": ["Peshawar", "Mardan", "Mingora", "Kohat", "Abbottabad", "Dera Ismail Khan", "Nowshera", "Charsadda", "Swabi", "Sawabi", "Mansehra", "Bannu", "Timargara", "Haripur", "Swat", "Chitral"],
+  "Balochistan": ["Quetta", "Turbat", "Khuzdar", "Hub", "Chaman", "Gwadar", "Dera Murad Jamali", "Sibi", "Zhob", "Loralai"],
+  "Azad Kashmir": ["Muzaffarabad", "Mirpur", "Rawalakot", "Kotli", "Bhimber", "Bagh", "Sudhanoti"],
+  "Gilgit-Baltistan": ["Gilgit", "Skardu", "Hunza", "Chilas", "Gahkuch", "Aliabad", "Shigar", "Khaplu"],
+  "Islamabad Capital Territory": ["Islamabad"]
+};
+
+export function getProvinceFromCity(city: string | null | undefined): string {
+  if (!city || !city.trim()) return '';
+  const cleanCity = city.trim().toLowerCase();
+  for (const [province, cities] of Object.entries(PROVINCE_CITIES_MAP)) {
+    if (cities.some(c => c.toLowerCase() === cleanCity)) {
+      return province;
+    }
+  }
+  return '';
+}

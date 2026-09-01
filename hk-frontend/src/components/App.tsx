@@ -15,6 +15,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import Tesseract from "tesseract.js";
+import { getProvinceFromCity, PROVINCE_CITIES_MAP } from "@/lib/normalization";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,15 +58,7 @@ function useDebounce<T>(value: T, delay: number = 300): T {
 }
 
 // ─── Mock Data & Constants ──────────────────────────────────────────────────────
-const PROVINCE_CITIES: Record<string, string[]> = {
-  "Punjab": ["Lahore", "Faisalabad", "Rawalpindi", "Multan", "Gujranwala", "Sargodha", "Bahawalpur", "Sialkot", "Sheikhupura", "Rahim Yar Khan", "Jhang", "Dera Ghazi Khan", "Gujrat", "Sahiwal", "Kasur", "Okara", "Chiniot", "Kamoke", "Hafizabad", "Sadiqabad", "Burewala", "Muzaffargarh", "Khanpur", "Gojra", "Bahawalnagar", "Muridke", "Pakpattan", "Jaranwala", "Chishtian", "Daska", "Mandi Bahauddin", "Ahmadpur East", "Kamalia", "Vehari", "Wazirabad", "Khushab", "Chakwal", "Mianwali", "Kot Adu"].sort(),
-  "Sindh": ["Karachi", "Hyderabad", "Sukkur", "Larkana", "Nawabshah", "Mirpur Khas", "Jacobabad", "Shikarpur", "Tando Adam", "Khairpur", "Dadu", "Tando Allahyar", "Kotri", "Thatta", "Badin", "Ghotki", "Kashmore", "Umerkot", "Matiari"].sort(),
-  "Khyber Pakhtunkhwa": ["Peshawar", "Mardan", "Mingora", "Kohat", "Abbottabad", "Dera Ismail Khan", "Nowshera", "Charsadda", "Swabi", "Mansehra", "Bannu", "Timargara", "Haripur", "Swat", "Chitral"].sort(),
-  "Balochistan": ["Quetta", "Turbat", "Khuzdar", "Hub", "Chaman", "Gwadar", "Dera Murad Jamali", "Sibi", "Zhob", "Loralai"].sort(),
-  "Azad Kashmir": ["Muzaffarabad", "Mirpur", "Rawalakot", "Kotli", "Bhimber", "Bagh", "Sudhanoti"].sort(),
-  "Gilgit-Baltistan": ["Gilgit", "Skardu", "Hunza", "Chilas", "Gahkuch", "Aliabad", "Shigar", "Khaplu"].sort(),
-  "Islamabad Capital Territory": ["Islamabad"]
-};
+const PROVINCE_CITIES: Record<string, string[]> = PROVINCE_CITIES_MAP;
 const PROVINCES = Object.keys(PROVINCE_CITIES);
 
 const MOCK_ORDERS: Order[] = [];
@@ -1360,6 +1353,7 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
         customer: o.customer?.name || "Unknown",
         whatsapp: o.customer?.phone || "",
         altPhone: o.customer?.alternatePhone || "",
+        province: o.customer?.province || getProvinceFromCity(o.customer?.city),
         city: o.customer?.city || "",
         address: o.customer?.address || "",
         amount: o.totalAmount,
@@ -1697,6 +1691,7 @@ function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder,
         customer: o.customer?.name || "Unknown",
         whatsapp: o.customer?.phone || "",
         altPhone: o.customer?.alternatePhone || "",
+        province: o.customer?.province || getProvinceFromCity(o.customer?.city),
         city: o.customer?.city || "",
         address: o.customer?.address || "",
         amount: o.totalAmount,
@@ -3321,7 +3316,7 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
               {[
                 ["Name", o.customer],
                 ["WhatsApp", o.whatsapp],
-                ["Province", o.province || "—"],
+                ["Province", o.province || getProvinceFromCity(o.city) || "—"],
                 ["City", o.city],
                 ["Address", o.address],
               ].map(([label, val]) => (
@@ -5131,7 +5126,7 @@ export default function App() {
         products: o.items?.map((i: any) => ({ name: i.productName, qty: i.qty, price: i.unitPrice })) || [],
         type: o.orderType,
         notes: o.notes,
-        province: Object.entries(PROVINCE_CITIES).find(([_, cities]) => cities.includes(o.customer?.city || ""))?.[0] || "",
+        province: o.customer?.province || getProvinceFromCity(o.customer?.city),
         deliveryCharges: o.deliveryCharges || 0,
         advancePayment: o.advancePayment || 0,
         paymentType: o.paymentType || "Courier",
