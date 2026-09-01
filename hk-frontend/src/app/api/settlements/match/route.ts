@@ -102,7 +102,7 @@ export async function POST(request: Request) {
           tracking,
           matched: match.order.orderNo,
           orderId: match.orderId,
-          amount: match.order.totalAmount,
+          amount: Math.max(0, match.order.totalAmount - match.order.advancePayment),
           status: match.order.codStatus === 'RECEIVED' ? 'already_received' : 'matched'
         };
       } else {

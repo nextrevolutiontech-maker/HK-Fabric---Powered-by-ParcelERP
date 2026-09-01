@@ -300,15 +300,17 @@ export const OrderService = {
       _sum: { totalAmount: true }
     });
 
-    const codPendingAgg = await prisma.order.aggregate({
+    const pendingCodOrders = await prisma.order.findMany({
       where: { ...baseWhere, orderType: 'COD', codStatus: 'PENDING' },
-      _sum: { totalAmount: true }
+      select: { totalAmount: true, advancePayment: true }
     });
+    const codPendingAmount = pendingCodOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
 
-    const codReceivedAgg = await prisma.order.aggregate({
+    const receivedCodOrders = await prisma.order.findMany({
       where: { ...baseWhere, orderType: 'COD', codStatus: 'RECEIVED' },
-      _sum: { totalAmount: true }
+      select: { totalAmount: true, advancePayment: true }
     });
+    const codReceivedAmount = receivedCodOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
 
     // Non-COD Aggregations
     const nonCodCount = await prisma.order.count({
@@ -320,15 +322,21 @@ export const OrderService = {
       _sum: { totalAmount: true }
     });
 
+    const advanceAgg = await prisma.order.aggregate({
+      where: baseWhere,
+      _sum: { advancePayment: true }
+    });
+
     const codSales = codSalesAgg._sum.totalAmount || 0;
     const nonCodSales = nonCodSalesAgg._sum.totalAmount || 0;
+    const totalAdvance = advanceAgg._sum.advancePayment || 0;
 
     return {
       cod: {
         count: codCount,
         sales: codSales,
-        pendingAmount: codPendingAgg._sum.totalAmount || 0,
-        receivedAmount: codReceivedAgg._sum.totalAmount || 0,
+        pendingAmount: codPendingAmount,
+        receivedAmount: codReceivedAmount,
       },
       nonCod: {
         count: nonCodCount,
@@ -337,6 +345,7 @@ export const OrderService = {
       overall: {
         totalCount: codCount + nonCodCount,
         totalSales: codSales + nonCodSales,
+        totalAdvance,
       }
     };
   },
@@ -411,12 +420,13 @@ export const OrderService = {
       throw new Error("Advance payment cannot exceed Grand Total.");
     }
 
-    const calculatedTotalAmount = Math.max(0, grandTotal - safeAdvance);
+    const calculatedTotalAmount = grandTotal;
+    const netCodAmount = Math.max(0, grandTotal - safeAdvance);
     
     // Strict Financial Classification Rule:
-    // Remaining COD Amount == 0 -> NON-COD (100% advance / prepaid)
-    // Remaining COD Amount > 0 -> COD (courier collects remaining balance)
-    const cleanOrderType = calculatedTotalAmount === 0 ? "NON-COD" : "COD";
+    // Net COD Amount == 0 -> NON-COD (100% advance / prepaid)
+    // Net COD Amount > 0 -> COD (courier collects remaining balance)
+    const cleanOrderType = netCodAmount === 0 ? "NON-COD" : "COD";
 
     if (paymentType !== "Online" && paymentType !== "Courier") {
       throw new Error("Payment type must be 'Online' or 'Courier'");
@@ -766,7 +776,7 @@ export const OrderService = {
         }
         const remAmount = Math.max(0, grandTotal - safeAdvance);
         updateData.orderType = remAmount === 0 ? "NON-COD" : "COD";
-        updateData.totalAmount = remAmount;
+        updateData.totalAmount = grandTotal;
       } else if (updateData.deliveryCharges !== undefined || updateData.advancePayment !== undefined || updateData.orderType !== undefined) {
         const dbItems = await tx.orderItem.findMany({ where: { orderId: id } });
         const itemsSum = dbItems.reduce((sum, i) => sum + i.lineTotal, 0);
@@ -776,7 +786,7 @@ export const OrderService = {
         }
         const remAmount = Math.max(0, grandTotal - safeAdvance);
         updateData.orderType = remAmount === 0 ? "NON-COD" : "COD";
-        updateData.totalAmount = remAmount;
+        updateData.totalAmount = grandTotal;
       }
 
       const updatedOrder = await tx.order.update({

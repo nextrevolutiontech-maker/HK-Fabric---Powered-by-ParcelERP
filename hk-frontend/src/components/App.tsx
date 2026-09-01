@@ -4165,13 +4165,15 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
   };
 
   const handleExportExcel = () => {
-    const headers = ["Order No", "Date", "Customer", "City", "Amount", "Status", "COD Status", "Tracking No", "Courier"];
+    const headers = ["Order No", "Date", "Customer", "City", "Gross Amount", "Advance Payment", "Net COD", "Status", "COD Status", "Tracking No", "Courier"];
     const rows = filteredOrders.map(o => [
       o.id,
       o.date,
       `"${o.customer}"`,
       `"${o.city}"`,
       o.amount,
+      o.advancePayment || 0,
+      Math.max(0, o.amount - (o.advancePayment || 0)),
       o.status,
       o.codStatus,
       o.trackingNo || "",

@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
       const payments = orders.map(order => ({
         orderId: order.id,
-        amount: order.totalAmount,
+        amount: Math.max(0, order.totalAmount - order.advancePayment),
         notes: 'Auto-approved via Settlement OCR'
       }));
 
