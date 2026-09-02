@@ -1585,8 +1585,16 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
                       </div>
                     </td>
                     <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{o.date}</td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-[#D4AF37] whitespace-nowrap">
-                      {formatPKR(o.amount)}
+                    <td className="py-3 px-4 text-right font-mono whitespace-nowrap">
+                      <div className="text-slate-900 font-bold text-xs">{formatPKR(o.amount)}</div>
+                      {o.advancePayment > 0 ? (
+                        <div className="text-[10px] font-sans">
+                          <span className="text-emerald-700 font-medium">Adv: -{formatPKR(o.advancePayment)}</span>
+                          <div className="font-mono font-bold text-[#D4AF37]">{formatPKR(Math.max(0, o.amount - o.advancePayment))} COD</div>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 font-sans">Full COD</div>
+                      )}
                     </td>
                     <td className="py-3 px-4 font-mono">
                       {o.trackingNo ? (
@@ -1898,8 +1906,9 @@ function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder,
                       </div>
                     </td>
                     <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{o.date}</td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-[#0F172A] whitespace-nowrap">
-                      {formatPKR(o.amount)}
+                    <td className="py-3 px-4 text-right font-mono whitespace-nowrap">
+                      <div className="text-indigo-700 font-bold text-xs">{formatPKR(o.amount)}</div>
+                      <div className="text-[10px] text-emerald-600 font-sans font-semibold">100% Prepaid</div>
                     </td>
                     <td className="py-3 px-4 font-medium text-slate-700">
                       <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[11px] font-bold">
@@ -4118,8 +4127,9 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
   });
 
   const totalRevenue = filteredOrders.filter(o => o.status !== "void").reduce((a, b) => a + b.amount, 0);
-  const codCollected = filteredOrders.filter(o => o.codStatus === "received").reduce((a, b) => a + b.amount, 0);
-  const returnsCount = filteredOrders.filter(o => o.status === "returned").length;
+  const codRevenue = filteredOrders.filter(o => o.status !== "void" && o.type === "COD").reduce((a, b) => a + b.amount, 0);
+  const nonCodRevenue = filteredOrders.filter(o => o.status !== "void" && o.type === "NON-COD").reduce((a, b) => a + b.amount, 0);
+  const totalAdvance = filteredOrders.filter(o => o.status !== "void").reduce((a, b) => a + (b.advancePayment || 0), 0);
 
   const handleExportPDF = async () => {
     if (!reportRef.current || isExporting) return;
@@ -4218,16 +4228,16 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Orders", value: filteredOrders.length, trend: "+12%", up: true, icon: Package, color: "text-blue-600" },
-          { label: "Revenue", value: formatPKR(totalRevenue), trend: "+8%", up: true, icon: TrendingUp, color: "text-indigo-600" },
-          { label: "COD Collected", value: formatPKR(codCollected), trend: "+15%", up: true, icon: Banknote, color: "text-emerald-600" },
-          { label: "Returns", value: returnsCount, trend: "-2 orders", up: false, icon: AlertTriangle, color: "text-red-500" },
+          { label: "Grand Total Sales", value: formatPKR(totalRevenue), sub: `${filteredOrders.length} Total Parcels (COD + Non-COD)`, icon: DollarSign, color: "text-[#D4AF37]" },
+          { label: "COD Sales Revenue", value: formatPKR(codRevenue), sub: `${filteredOrders.filter(o => o.type === "COD").length} COD Parcels`, icon: Banknote, color: "text-emerald-600" },
+          { label: "Non-COD Sales Revenue", value: formatPKR(nonCodRevenue), sub: `${filteredOrders.filter(o => o.type === "NON-COD").length} Prepaid Parcels`, icon: Package, color: "text-indigo-600" },
+          { label: "Advance Payments", value: formatPKR(totalAdvance), sub: "Total Advance Cash Collected", icon: TrendingUp, color: "text-amber-600" },
         ].map((c, i) => (
           <StatCard 
             key={i} 
             label={c.label} 
             value={c.value} 
-            sub={`${c.up ? "↑" : "↓"} ${c.trend} vs last period`} 
+            sub={c.sub} 
             icon={c.icon} 
             color={`bg-white ${c.color}`} 
             priority="secondary" 
