@@ -301,13 +301,13 @@ export const OrderService = {
     });
 
     const pendingCodOrders = await prisma.order.findMany({
-      where: { ...baseWhere, orderType: 'COD', codStatus: 'PENDING' },
+      where: { ...baseWhere, orderType: 'COD', codStatus: { in: ['PENDING', 'pending', 'Pending'] } },
       select: { totalAmount: true, advancePayment: true }
     });
     const codPendingAmount = pendingCodOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
 
     const receivedCodOrders = await prisma.order.findMany({
-      where: { ...baseWhere, orderType: 'COD', codStatus: 'RECEIVED' },
+      where: { ...baseWhere, orderType: 'COD', codStatus: { in: ['RECEIVED', 'received', 'Received'] } },
       select: { totalAmount: true, advancePayment: true }
     });
     const codReceivedAmount = receivedCodOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
