@@ -83,6 +83,28 @@ $$\text{Net COD Amount (Remaining Balance)} = \max(0, \text{Grand Total} - \text
 
 ---
 
+## ⚡ 7. Instant Optimistic State Updates (0ms UI Latency)
+
+### 🟢 The Engineering Solution:
+Admin Panel mein Product aur Category mutations (`addProduct`, `updateProduct`, `deleteProduct`, `addCategory`, `updateCategory`, `deleteCategory`) ke waqt network latency ka wait karne ke bajaye React state ko **0ms** mein optimistically update kar diya jata hai:
+```typescript
+setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+```
+Is se UI table bina page refresh ya delay ke instantly target values update karta hai, jabke database sync aur Vercel revalidation background process ke taur par execute hoti hain.
+
+---
+
+## 🖼️ 8. Zero-Warning Image Fallback System (Empty `src=""` Elimination)
+
+### 🟢 The Engineering Solution:
+Empty string `src=""` HTML standard ke mutabiq browser warning generate karta hai aur entire page ko network par re-download karne ki koshish karta hai. System ke tamam product, category, collection, aur order thumbnail images par explicit fallback checks implement kiye gaye hain:
+```tsx
+src={image || 'https://images.unsplash.com/photo-1616046229478-9901c5536a45?w=600&h=600&fit=crop&auto=format'}
+```
+Is se zero browser warnings aur smooth rendering ensure hoti hai.
+
+---
+
 # 🎓 SECTION 2: Technical Interview Q&A Mastery Guide (Sawaal - Jawaab)
 
 ---
@@ -104,6 +126,12 @@ $$\text{Net COD Amount (Remaining Balance)} = \max(0, \text{Grand Total} - \text
 ### ❓ Q3: "Search Bar performance ko optimize karne ke liye aap ne kya pattern use kiya?"
 > **💬 Ideal Answer (Technical Response):**  
 > "Humne `useDebounce` custom hook Implement kiya with 300ms delay window, jis se single-character typing lag bilkul eliminate ho jata hai."
+
+---
+
+### ❓ Q4: "Product/Category edit karne par UI instant update kyun nahi hota tha aur isko kaise fix kiya?"
+> **💬 Ideal Answer (Technical Response):**  
+> "Pehle frontend network response (`await refreshProducts()`) ka wait karta tha. Humne AdminContext mein **Optimistic UI State Updates** implement kiye, jis se edit submit karte hi local React state 0ms latency mein update ho jati hai aur database sync background mein execute hota hai. User ko page refresh karne ki bilkul zaroorat nahi rehti."
 
 ---
 
