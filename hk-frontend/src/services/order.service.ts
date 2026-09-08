@@ -881,5 +881,131 @@ export const OrderService = {
     });
 
     return { message: `Order #${order.orderNo} deleted successfully` };
+  },
+
+  /**
+   * Authoritative Product-Wise Itemized Sales & Logistics Ledger aggregator
+   */
+  async getProductSalesLedger(options: {
+    startDateStr?: string;
+    endDateStr?: string;
+    search?: string;
+    orderType?: string;
+  } = {}) {
+    const { startDateStr, endDateStr, search, orderType } = options;
+    const { startPKT, endPKT } = getPKTDateBounds(startDateStr, endDateStr);
+
+    const whereOrder: any = {
+      status: { notIn: ['void', 'VOID'] }
+    };
+
+    if (orderType && orderType !== 'all' && orderType !== 'ALL') {
+      whereOrder.orderType = orderType.toUpperCase();
+    }
+
+    if (startPKT || endPKT) {
+      whereOrder.createdAt = {};
+      if (startPKT) whereOrder.createdAt.gte = startPKT;
+      if (endPKT) whereOrder.createdAt.lte = endPKT;
+    }
+
+    const orders = await prisma.order.findMany({
+      where: whereOrder,
+      include: {
+        customer: true,
+        items: true,
+        trackingEntries: true,
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const itemizedList: any[] = [];
+    const productSummaryMap: Record<string, { productName: string; totalQty: number; totalSales: number; orderIds: Set<string> }> = {};
+
+    let totalUnitsSold = 0;
+    let totalRevenue = 0;
+    const uniqueOrderIds = new Set<string>();
+
+    for (const o of orders) {
+      const netCodAmount = Math.max(0, o.totalAmount - o.advancePayment);
+      const trackingNo = o.trackingEntries?.[0]?.trackingNumber || null;
+      const courierName = o.trackingEntries?.[0]?.courierName || null;
+
+      for (const item of o.items) {
+        // Search filtering by product name, orderNo, customer name, phone, city
+        if (search && search.trim()) {
+          const q = search.trim().toLowerCase();
+          const matchProd = item.productName.toLowerCase().includes(q);
+          const matchOrder = o.orderNo.toLowerCase().includes(q);
+          const matchCust = (o.customer?.name || '').toLowerCase().includes(q);
+          const matchPhone = (o.customer?.phone || '').includes(q);
+          const matchCity = (o.customer?.city || '').toLowerCase().includes(q);
+          if (!matchProd && !matchOrder && !matchCust && !matchPhone && !matchCity) {
+            continue;
+          }
+        }
+
+        uniqueOrderIds.add(o.id);
+        totalUnitsSold += item.qty;
+        totalRevenue += item.lineTotal;
+
+        itemizedList.push({
+          id: item.id,
+          orderId: o.id,
+          orderNo: o.orderNo,
+          orderDate: o.createdAt,
+          orderType: o.orderType,
+          handledBy: o.handledBy || 'System',
+          status: o.status,
+          codStatus: o.codStatus,
+          customerName: o.customer?.name || 'Unknown',
+          customerPhone: o.customer?.phone || '',
+          customerCity: o.customer?.city || '',
+          customerProvince: o.customer?.province || '',
+          productName: item.productName,
+          qty: item.qty,
+          unitPrice: item.unitPrice,
+          lineTotal: item.lineTotal,
+          orderTotal: o.totalAmount,
+          deliveryCharges: o.deliveryCharges,
+          advancePayment: o.advancePayment,
+          netCodAmount,
+          trackingNo,
+          courierName,
+        });
+
+        const pName = item.productName.trim();
+        if (!productSummaryMap[pName]) {
+          productSummaryMap[pName] = {
+            productName: pName,
+            totalQty: 0,
+            totalSales: 0,
+            orderIds: new Set<string>()
+          };
+        }
+        productSummaryMap[pName].totalQty += item.qty;
+        productSummaryMap[pName].totalSales += item.lineTotal;
+        productSummaryMap[pName].orderIds.add(o.id);
+      }
+    }
+
+    const productSummary = Object.values(productSummaryMap).map(p => ({
+      productName: p.productName,
+      totalQty: p.totalQty,
+      totalSales: p.totalSales,
+      orderCount: p.orderIds.size,
+      avgPrice: p.totalQty > 0 ? Math.round(p.totalSales / p.totalQty) : 0
+    })).sort((a, b) => b.totalSales - a.totalSales);
+
+    return {
+      items: itemizedList,
+      productSummary,
+      stats: {
+        totalUnitsSold,
+        totalRevenue,
+        uniqueProductsCount: productSummary.length,
+        totalOrdersCount: uniqueOrderIds.size
+      }
+    };
   }
 };

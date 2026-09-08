@@ -4819,6 +4819,441 @@ function DailyParcelHistoryScreen({ setScreen, onViewOrder, orders }: {
   );
 }
 
+// ─── Product Sales Ledger & Reports Screen ───────────────────────────────────
+
+function ProductSalesLedgerScreen({ setScreen, onViewOrder }: { setScreen: (s: Screen) => void; onViewOrder: (id: string) => void }) {
+  const [activeTab, setActiveTab] = useState<"itemized" | "summary">("itemized");
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  const [orderTypeFilter, setOrderTypeFilter] = useState<string>("all");
+  const [startDateStr, setStartDateStr] = useState<string>("");
+  const [endDateStr, setEndDateStr] = useState<string>("");
+  const [quickDate, setQuickDate] = useState<"all" | "this-month" | "last-month" | "last-30">("all");
+
+  const handleQuickDateChange = (preset: "all" | "this-month" | "last-month" | "last-30") => {
+    setQuickDate(preset);
+    const now = new Date();
+    if (preset === "all") {
+      setStartDateStr("");
+      setEndDateStr("");
+    } else if (preset === "this-month") {
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      setStartDateStr(`${year}-${month}-01`);
+      setEndDateStr(now.toISOString().split('T')[0]);
+    } else if (preset === "last-month") {
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+      setStartDateStr(prev.toISOString().split('T')[0]);
+      setEndDateStr(lastDay.toISOString().split('T')[0]);
+    } else if (preset === "last-30") {
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+      setStartDateStr(thirtyDaysAgo.toISOString().split('T')[0]);
+      setEndDateStr(now.toISOString().split('T')[0]);
+    }
+  };
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['product-sales-ledger', debouncedSearch, orderTypeFilter, startDateStr, endDateStr],
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+    refetchOnMount: true,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (debouncedSearch.trim()) params.append('search', debouncedSearch.trim());
+      if (orderTypeFilter !== 'all') params.append('orderType', orderTypeFilter);
+      if (startDateStr) params.append('startDate', startDateStr);
+      if (endDateStr) params.append('endDate', endDateStr);
+
+      const res = await fetch(`/api/reports/product-sales?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to load product sales ledger");
+      return (await safeResponseJson(res)) || { items: [], productSummary: [], stats: {} };
+    }
+  });
+
+  const items = data?.items || [];
+  const productSummary = data?.productSummary || [];
+  const stats = data?.stats || {};
+
+  const handleExportCSV = () => {
+    if (!items || items.length === 0) return;
+
+    const headers = [
+      "Order #", "Order Date", "Order Type", "Handled By", "Customer Name",
+      "Customer Phone", "City", "Province", "Product Description", "Qty",
+      "Unit Price (PKR)", "Line Total (PKR)", "Order Grand Total (PKR)",
+      "Advance Payment (PKR)", "Net COD Amount (PKR)", "Courier", "Tracking #"
+    ];
+
+    const rows = items.map((i: any) => [
+      `"${i.orderNo || ''}"`,
+      `"${i.orderDate ? new Date(i.orderDate).toISOString().split('T')[0] : ''}"`,
+      `"${i.orderType || ''}"`,
+      `"${i.handledBy || ''}"`,
+      `"${(i.customerName || '').replace(/"/g, '""')}"`,
+      `"${i.customerPhone || ''}"`,
+      `"${(i.customerCity || '').replace(/"/g, '""')}"`,
+      `"${(i.customerProvince || '').replace(/"/g, '""')}"`,
+      `"${(i.productName || '').replace(/"/g, '""')}"`,
+      i.qty,
+      i.unitPrice,
+      i.lineTotal,
+      i.orderTotal,
+      i.advancePayment,
+      i.netCodAmount,
+      `"${i.courierName || ''}"`,
+      `"${i.trackingNo || ''}"`
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    const dateTag = startDateStr || endDateStr ? `${startDateStr}_to_${endDateStr}` : 'all_time';
+    link.setAttribute('download', `HK_Fabric_Product_Sales_Ledger_${dateTag}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Screen Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div>
+          <h1 className="text-lg sm:text-2xl font-extrabold text-[#0F172A] tracking-tight flex items-center gap-2">
+            <ClipboardList className="text-[#D4AF37] flex-shrink-0" size={24} />
+            <span>Itemized Product Sales Ledger</span>
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Item-by-item breakdown, per-product sales summary, and wholesale expense calculation ledger.
+          </p>
+        </div>
+
+        <button
+          onClick={handleExportCSV}
+          disabled={items.length === 0}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all whitespace-nowrap w-full sm:w-auto"
+        >
+          <Download size={15} /> Export CSV to Excel
+        </button>
+      </div>
+
+      {/* Metric Cards Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard
+          label="Total Units Sold"
+          value={(stats.totalUnitsSold || 0).toLocaleString()}
+          sub="Items Dispatched"
+          icon={Box}
+          color="bg-indigo-50 text-indigo-700"
+        />
+        <StatCard
+          label="Product Revenue"
+          value={formatPKR(stats.totalRevenue || 0)}
+          sub="Products Sales Subtotal"
+          icon={TrendingUp}
+          color="bg-emerald-50 text-emerald-700"
+        />
+        <StatCard
+          label="Unique Products"
+          value={stats.uniqueProductsCount || 0}
+          sub="Catalog Products"
+          icon={Package}
+          color="bg-blue-50 text-blue-700"
+        />
+        <StatCard
+          label="Parcels Included"
+          value={stats.totalOrdersCount || 0}
+          sub="Customer Orders"
+          icon={Layers}
+          color="bg-amber-50 text-amber-700"
+        />
+      </div>
+
+      {/* Control Filter Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Quick Date Presets */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/80 overflow-x-auto scrollbar-hide">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 whitespace-nowrap">Period:</span>
+            {[
+              { id: "all", label: "All Time" },
+              { id: "this-month", label: "This Month" },
+              { id: "last-month", label: "Last Month" },
+              { id: "last-30", label: "Last 30 Days" },
+            ].map(p => (
+              <button
+                key={p.id}
+                onClick={() => handleQuickDateChange(p.id as any)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
+                  quickDate === p.id
+                    ? "bg-[#0F172A] text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Switcher */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200/80 overflow-x-auto scrollbar-hide">
+            <button
+              onClick={() => setActiveTab("itemized")}
+              className={cn(
+                "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap flex-1 sm:flex-initial justify-center",
+                activeTab === "itemized" ? "bg-white text-[#0F172A] shadow-xs" : "text-slate-500 hover:text-slate-800"
+              )}
+            >
+              <ClipboardList size={14} /> Itemized Sales Ledger ({items.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("summary")}
+              className={cn(
+                "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap flex-1 sm:flex-initial justify-center",
+                activeTab === "summary" ? "bg-white text-[#0F172A] shadow-xs" : "text-slate-500 hover:text-slate-800"
+              )}
+            >
+              <BarChart2 size={14} /> Per-Product Summary ({productSummary.length})
+            </button>
+          </div>
+        </div>
+
+        {/* Detailed Controls Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-2 border-t border-slate-100 items-center">
+          <div className="sm:col-span-5 relative">
+            <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search product name, customer, phone, order #, city..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F172A]"
+            />
+          </div>
+
+          <div className="sm:col-span-3">
+            <FieldSelect
+              value={orderTypeFilter}
+              onChange={e => setOrderTypeFilter(e.target.value)}
+              className="text-xs py-2 rounded-xl"
+            >
+              <option value="all">All Order Types (COD & Non-COD)</option>
+              <option value="COD">COD Parcels Only</option>
+              <option value="NON-COD">Non-COD (Prepaid) Only</option>
+            </FieldSelect>
+          </div>
+
+          <div className="sm:col-span-4 flex items-center gap-2">
+            <input
+              type="date"
+              value={startDateStr}
+              onChange={e => { setStartDateStr(e.target.value); setQuickDate("all"); }}
+              className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-xl font-mono bg-slate-50"
+            />
+            <span className="text-slate-400 text-xs font-bold">to</span>
+            <input
+              type="date"
+              value={endDateStr}
+              onChange={e => { setEndDateStr(e.target.value); setQuickDate("all"); }}
+              className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-xl font-mono bg-slate-50"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Main Ledger Content */}
+      {activeTab === "itemized" ? (
+        /* Granular Itemized Sales Ledger Table */
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-slate-50/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-xs font-bold text-[#0F172A] uppercase tracking-wider flex items-center gap-2">
+              <Box size={16} className="text-indigo-600" />
+              Granular Itemized Customer Sales Ledger
+            </div>
+            <div className="text-xs text-slate-400 font-mono">
+              Showing <span className="font-bold text-slate-700">{items.length}</span> sold item entries
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="p-12 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+              <div className="h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Loading itemized sales ledger...
+            </div>
+          ) : items.length === 0 ? (
+            <div className="p-16 text-center text-slate-400 text-xs space-y-1">
+              <Package size={32} className="mx-auto text-slate-300 mb-2" />
+              <div className="font-bold text-slate-600 text-sm">No sales items match your filter criteria</div>
+              <p>Try clearing your search or date range filters.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto w-full scrollbar-thin">
+              <table className="w-full text-left text-xs min-w-[950px]">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-mono text-[10px]">
+                  <tr>
+                    <th className="py-3 px-3.5 whitespace-nowrap min-w-[130px]">Order #</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap min-w-[95px]">Date</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap min-w-[80px]">Type</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap min-w-[160px]">Customer & City</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap min-w-[200px]">Product Description</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap text-center min-w-[60px]">Qty</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap text-right min-w-[90px]">Unit Price</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap text-right min-w-[100px]">Item Total</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap text-right min-w-[100px]">Parcel Total</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap text-right min-w-[100px]">Net COD</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap text-center min-w-[65px]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-sans">
+                  {items.map((i: any, index: number) => (
+                    <tr key={`${i.id}-${index}`} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono font-bold text-[#0F172A] whitespace-nowrap">
+                        <button onClick={() => onViewOrder(i.orderNo)} className="hover:underline text-indigo-600 whitespace-nowrap inline-block">
+                          {i.orderNo}
+                        </button>
+                        <div className="text-[10px] text-slate-400 font-normal font-sans">{i.handledBy}</div>
+                      </td>
+                      <td className="py-3 px-3.5 font-mono text-slate-500 whitespace-nowrap">
+                        {i.orderDate ? new Date(i.orderDate).toISOString().split('T')[0] : '—'}
+                      </td>
+                      <td className="py-3 px-3.5 font-mono whitespace-nowrap">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded font-extrabold text-[10px] whitespace-nowrap inline-block",
+                          i.orderType === "COD" ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60" : "bg-indigo-50 text-indigo-700 border border-indigo-200/60"
+                        )}>
+                          {i.orderType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3.5 min-w-[160px]">
+                        <div className="font-semibold text-slate-900 truncate max-w-[180px]">{i.customerName}</div>
+                        <div className="text-[11px] text-slate-400 font-mono whitespace-nowrap flex items-center gap-1">
+                          <span>{i.customerPhone}</span>
+                          {i.customerCity && (
+                            <>
+                              <span>•</span>
+                              <span className="truncate max-w-[90px]">{i.customerCity}</span>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-3.5 font-medium text-slate-900 min-w-[200px] max-w-[280px]">
+                        <div className="font-semibold text-slate-900 break-words">{i.productName}</div>
+                        {i.trackingNo && (
+                          <div className="text-[10px] text-slate-400 font-mono whitespace-nowrap truncate">
+                            Track: {i.trackingNo} ({i.courierName})
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-3.5 text-center font-mono font-extrabold text-slate-900 whitespace-nowrap">
+                        <span className="px-2 py-0.5 bg-slate-100 rounded-md border border-slate-200">{i.qty}</span>
+                      </td>
+                      <td className="py-3 px-3.5 text-right font-mono text-slate-700 whitespace-nowrap">
+                        {formatPKR(i.unitPrice)}
+                      </td>
+                      <td className="py-3 px-3.5 text-right font-mono font-extrabold text-[#0F172A] whitespace-nowrap">
+                        {formatPKR(i.lineTotal)}
+                      </td>
+                      <td className="py-3 px-3.5 text-right font-mono text-slate-600 whitespace-nowrap">
+                        {formatPKR(i.orderTotal)}
+                      </td>
+                      <td className="py-3 px-3.5 text-right font-mono whitespace-nowrap">
+                        {i.orderType === "COD" ? (
+                          <span className="font-bold text-[#D4AF37]">{formatPKR(i.netCodAmount)}</span>
+                        ) : (
+                          <span className="text-emerald-600 text-[11px] font-semibold">Fully Paid</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                        <button
+                          onClick={() => onViewOrder(i.orderNo)}
+                          className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors"
+                          title="View Full Parcel Details"
+                        >
+                          <Eye size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Per-Product Sales Summary Table (Aggregated View) */
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-slate-50/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-xs font-bold text-[#0F172A] uppercase tracking-wider flex items-center gap-2">
+              <BarChart2 size={16} className="text-emerald-600" />
+              Per-Product Aggregated Sales Summary
+            </div>
+            <div className="text-xs text-slate-400 font-mono">
+              Showing <span className="font-bold text-slate-700">{productSummary.length}</span> unique products
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="p-12 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+              <div className="h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Calculating product sales breakdown...
+            </div>
+          ) : productSummary.length === 0 ? (
+            <div className="p-16 text-center text-slate-400 text-xs">
+              No product summary data available for current selection.
+            </div>
+          ) : (
+            <div className="overflow-x-auto w-full scrollbar-thin">
+              <table className="w-full text-left text-xs min-w-[700px]">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-mono text-[10px]">
+                  <tr>
+                    <th className="py-3 px-4 whitespace-nowrap">#</th>
+                    <th className="py-3 px-4 whitespace-nowrap min-w-[180px]">Product Name</th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap min-w-[120px]">Total Units Sold</th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap min-w-[120px]">Parcels Included</th>
+                    <th className="py-3 px-4 text-right whitespace-nowrap min-w-[110px]">Average Price</th>
+                    <th className="py-3 px-4 text-right whitespace-nowrap min-w-[120px]">Total Revenue</th>
+                    <th className="py-3 px-4 text-right whitespace-nowrap min-w-[110px]">% of Total Revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-sans">
+                  {productSummary.map((p: any, idx: number) => {
+                    const pct = (stats.totalRevenue || 0) > 0 ? ((p.totalSales / stats.totalRevenue) * 100).toFixed(1) : "0.0";
+                    return (
+                      <tr key={p.productName} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4 font-mono text-slate-400 font-bold whitespace-nowrap">{idx + 1}</td>
+                        <td className="py-3 px-4 font-bold text-[#0F172A] text-sm">{p.productName}</td>
+                        <td className="py-3 px-4 text-center font-mono font-extrabold whitespace-nowrap">
+                          <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-100 inline-block">
+                            {p.totalQty} units
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono text-slate-600 whitespace-nowrap">
+                          {p.orderCount} parcels
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-700 whitespace-nowrap">
+                          {formatPKR(p.avgPrice)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-extrabold text-emerald-700 text-sm whitespace-nowrap">
+                          {formatPKR(p.totalSales)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-slate-800 whitespace-nowrap">
+                          {pct}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Login Screen Component ───────────────────────────────────────────────────
 
 function LoginScreen({ onLoginSuccess }: { onLoginSuccess: (user: any) => void }) {
@@ -5240,6 +5675,7 @@ export default function App() {
         queryClient.invalidateQueries({ queryKey: ['orders'] });
         queryClient.invalidateQueries({ queryKey: ['stats'] });
         queryClient.invalidateQueries({ queryKey: ['activities'] });
+        queryClient.invalidateQueries({ queryKey: ['product-sales-ledger'] });
         showGlobalToast("Order created successfully!", "success");
       } else {
         showGlobalToast("Order saved offline!", "info");
@@ -5283,6 +5719,7 @@ export default function App() {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
       queryClient.invalidateQueries({ queryKey: ['activities'] });
+      queryClient.invalidateQueries({ queryKey: ['product-sales-ledger'] });
       showGlobalToast("Order updated successfully!", "success");
     },
     onError: (err: any) => {
@@ -5509,6 +5946,7 @@ export default function App() {
           {screen === "tracking" && <TrackingScreen orders={orders} onSaveTracking={handleSaveTracking} onUpdateStatus={handleUpdateStatus} />}
           {screen === "cod" && <CODScreen orders={orders} onReceiveCOD={handleReceiveCOD} />}
           {screen === "settlements" && <SettlementsScreen />}
+          {screen === "reports" && <ProductSalesLedgerScreen setScreen={setScreen} onViewOrder={handleViewOrder} />}
           {screen === "daily-history" && (
             <DailyParcelHistoryScreen
               setScreen={setScreen}
