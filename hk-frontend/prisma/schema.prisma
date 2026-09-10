@@ -160,6 +160,7 @@ model Activity {
   oldValue    String?
   newValue    String?
   details     String?
+  isReverted  Boolean  @default(false)
   createdAt   DateTime @default(now())
 }
 

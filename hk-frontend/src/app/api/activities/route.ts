@@ -27,6 +27,7 @@ export async function GET(request: Request) {
         order: act.orderId || "-",
         performedBy: act.performedBy,
         details: act.details || null,
+        isReverted: Boolean(act.isReverted),
       };
     });
 

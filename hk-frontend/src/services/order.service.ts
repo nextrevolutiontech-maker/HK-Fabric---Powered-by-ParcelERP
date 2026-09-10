@@ -869,6 +869,135 @@ export const OrderService = {
     });
   },
 
+  /**
+   * 1-Click Action Revert / Undo logic
+   */
+  async revertActivity(activityId: string, performedBy: string = "Staff Admin") {
+    const activity = await prisma.activity.findUnique({
+      where: { id: activityId }
+    });
+
+    if (!activity) {
+      throw new Error("Activity log not found");
+    }
+
+    if (activity.isReverted) {
+      throw new Error("This activity has already been reverted");
+    }
+
+    if (!activity.orderId) {
+      throw new Error("Cannot revert an activity that is not associated with an order");
+    }
+
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [
+          { id: activity.orderId },
+          { orderNo: activity.orderId }
+        ]
+      },
+      include: { trackingEntries: { orderBy: { createdAt: 'desc' } } }
+    });
+
+    if (!order) {
+      throw new Error("Associated order not found");
+    }
+
+    const targetId = order.id;
+
+    // Determine target state from oldValue or previous state
+    let targetStatus = order.status;
+    let targetCodStatus = order.codStatus;
+    let revertActionSummary = `Reverted "${activity.action}" for Order #${order.orderNo}`;
+
+    // Extract status from oldValue if present e.g. "Status: shipped"
+    if (activity.oldValue && activity.oldValue.includes("Status: ")) {
+      const match = activity.oldValue.match(/Status:\s*([a-zA-Z]+)/);
+      if (match && match[1]) {
+        targetStatus = match[1].toLowerCase();
+      }
+    } else {
+      // Fallback: Find the previous activity record for this order
+      const previousActivity = await prisma.activity.findFirst({
+        where: {
+          orderId: targetId,
+          id: { not: activityId },
+          createdAt: { lt: activity.createdAt }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      if (previousActivity && previousActivity.newValue && previousActivity.newValue.includes("Status: ")) {
+        const match = previousActivity.newValue.match(/Status:\s*([a-zA-Z]+)/);
+        if (match && match[1]) {
+          targetStatus = match[1].toLowerCase();
+        }
+      } else {
+        // Default revert fallback
+        if (activity.action.includes("delivered") || activity.action.includes("COD Received")) {
+          targetStatus = "shipped";
+          targetCodStatus = "PENDING";
+        } else if (activity.action.includes("shipped")) {
+          targetStatus = "confirmed";
+        }
+      }
+    }
+
+    // Specific action handlers
+    if (activity.action === "COD Received" || activity.action.includes("COD Received")) {
+      targetStatus = "shipped";
+      targetCodStatus = "PENDING";
+    }
+
+    if (activity.action === "Void Order" || activity.action.includes("VOID") || activity.action.includes("void")) {
+      if (targetStatus === "void" || targetStatus === "VOID") {
+        targetStatus = "shipped";
+      }
+    }
+
+    return await prisma.$transaction(async (tx) => {
+      // If reverting COD Received, delete CodPayment records created for this order
+      if (activity.action === "COD Received" || activity.action.includes("COD Received")) {
+        await tx.codPayment.deleteMany({ where: { orderId: targetId } });
+      }
+
+      // Update Order to reverted state
+      const updatedOrder = await tx.order.update({
+        where: { id: targetId },
+        data: {
+          status: targetStatus,
+          codStatus: targetCodStatus,
+          voidReason: targetStatus === "void" ? order.voidReason : null,
+        },
+        include: { customer: true, items: true, trackingEntries: { orderBy: { createdAt: 'desc' } } }
+      });
+
+      // Mark activity as reverted
+      await tx.activity.update({
+        where: { id: activityId },
+        data: { isReverted: true }
+      });
+
+      // Create new audit activity entry
+      await tx.activity.create({
+        data: {
+          orderId: targetId,
+          action: "Action Reverted",
+          performedBy,
+          oldValue: `Action: ${activity.action} (${activity.newValue || ''})`,
+          newValue: `Restored Status: ${targetStatus.toUpperCase()}`,
+          details: revertActionSummary,
+          isReverted: false
+        }
+      });
+
+      return {
+        message: revertActionSummary,
+        order: updatedOrder
+      };
+    });
+  },
+
   async deleteOrder(id: string, pin?: string) {
     if (pin !== undefined) {
       if (!verifyOwnerPin(pin)) {

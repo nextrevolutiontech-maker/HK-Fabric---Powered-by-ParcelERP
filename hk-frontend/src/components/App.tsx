@@ -8,7 +8,7 @@ import {
   Eye, Edit2, Printer, Ban, CheckCircle2, Clock, AlertTriangle,
   TrendingUp, Upload, Download, User, Save, ArrowLeft, Check,
   AlertCircle, ChevronRight, Layers, XCircle, Calendar, LogOut,
-  Box, DollarSign, BarChart3, Activity, Sun, Moon, Sunrise, Sunset
+  Box, DollarSign, BarChart3, Activity, Sun, Moon, Sunrise, Sunset, RotateCcw
 } from "lucide-react";
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -1008,10 +1008,11 @@ function getDynamicGreeting(): { greeting: string; icon: "sunrise" | "sun" | "su
   return { greeting: "Good Night", icon: "moon" };
 }
 
-function DashboardScreen({ setScreen, onViewOrder, orders }: {
+function DashboardScreen({ setScreen, onViewOrder, orders, onRevertActivity }: {
   setScreen: (s: Screen) => void;
   onViewOrder: (id: string) => void;
   orders: Order[];
+  onRevertActivity?: (id: string) => void;
 }) {
   const { data: stats } = useQuery({
     queryKey: ['stats'],
@@ -1498,21 +1499,41 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
               <span className="text-[10px] text-slate-400 mt-0.5">Staff audit actions will appear here</span>
             </div>
           ) : (
-            <div className="space-y-3 font-sans overflow-y-auto max-h-[260px] pr-1 scrollbar-hide">
+            <div className="space-y-2.5 font-sans overflow-y-auto max-h-[260px] pr-1 scrollbar-hide">
               {activityLogs.slice(0, 5).map((log: any, idx: number) => (
-                <div key={log.id || idx} className="flex items-start gap-2.5 text-xs">
-                  <div className="p-1.5 rounded-full bg-slate-100 text-slate-600 mt-0.5 flex-shrink-0">
-                    <User size={12} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-800 truncate">{log.action || "Activity"}</span>
-                      <span className="text-[9px] text-slate-500 font-mono font-medium ml-2 flex-shrink-0">
-                        {formatActivityTime(log.createdAt, log.time, log.date)}
-                      </span>
+                <div key={log.id || idx} className="flex items-start justify-between gap-2 text-xs p-1.5 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    <div className="p-1.5 rounded-full bg-slate-100 text-slate-600 mt-0.5 flex-shrink-0">
+                      <User size={12} />
                     </div>
-                    <p className="text-[11px] text-slate-500 truncate mt-0.5">{log.details || log.performedBy || "Staff Action"}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800 truncate">{log.action || "Activity"}</span>
+                        <span className="text-[9px] text-slate-500 font-mono font-medium ml-2 flex-shrink-0">
+                          {formatActivityTime(log.createdAt, log.time, log.date)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 truncate mt-0.5">{log.details || log.performedBy || "Staff Action"}</p>
+                    </div>
                   </div>
+                  {log.order && log.order !== "-" && !log.isReverted && log.action !== "Action Reverted" && onRevertActivity && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to REVERT "${log.action}" for this order?`)) {
+                          onRevertActivity(log.id);
+                        }
+                      }}
+                      title="1-Click Revert / Undo Action"
+                      className="p-1 px-1.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200/80 transition-all flex items-center gap-1 flex-shrink-0 mt-0.5 active:scale-95 shadow-xs"
+                    >
+                      <RotateCcw size={10} /> Undo
+                    </button>
+                  )}
+                  {log.isReverted && (
+                    <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
+                      Reverted
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -4599,7 +4620,7 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
 
 // ─── Activity Log Screen ──────────────────────────────────────────────────────
 
-function ActivityLogScreen({ activityLogs }: { activityLogs: typeof ACTIVITY_DATA }) {
+function ActivityLogScreen({ activityLogs, onRevertActivity }: { activityLogs: any[]; onRevertActivity?: (id: string) => void }) {
   const actionColor: Record<string, string> = {
     "Create Order": "bg-blue-50 text-blue-700",
     "Update Order": "bg-orange-50 text-orange-700",
@@ -4607,40 +4628,70 @@ function ActivityLogScreen({ activityLogs }: { activityLogs: typeof ACTIVITY_DAT
     "Void Order": "bg-red-50 text-red-600",
     "Print Label": "bg-purple-50 text-purple-700",
     "Tracking Added": "bg-indigo-50 text-indigo-700",
+    "Action Reverted": "bg-amber-50 text-amber-800",
   };
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-[#0F172A]">Activity Log</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-[#0F172A]">Activity Log & Audit Trail</h1>
+        <span className="text-xs font-mono text-slate-500 font-medium bg-slate-100 px-3 py-1 rounded-full">
+          Total Logs: {activityLogs.length}
+        </span>
+      </div>
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
         <div className="overflow-x-auto flex-1">
-          <table className="w-full text-sm min-w-[520px]">
+          <table className="w-full text-sm min-w-[650px]">
             <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
               <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                 <th className="text-left px-6 py-3">Date</th>
                 <th className="text-left px-6 py-3">Time</th>
                 <th className="text-left px-6 py-3">Action</th>
-                <th className="text-left px-6 py-3">Order</th>
+                <th className="text-left px-6 py-3">Order / Details</th>
                 <th className="text-left px-6 py-3">Performed By</th>
+                <th className="text-right px-6 py-3">Revert Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {activityLogs.map(log => (
+              {activityLogs.map((log: any) => (
                 <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 text-xs font-medium text-slate-500">{log.date}</td>
                   <td className="px-6 py-4 font-mono text-xs text-slate-500">{log.time}</td>
                   <td className="px-6 py-4">
                     <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide ring-1 ring-inset",
-                      actionColor[log.action] ? `${actionColor[log.action].replace('bg-', 'bg-').replace('50', '50').replace('text-', 'text-').replace('700', '700')} ring-${actionColor[log.action].split(' ')[1].split('-')[1]}-600/20` : "bg-slate-50 text-slate-700 ring-slate-600/20"
+                      actionColor[log.action] ? `${actionColor[log.action]} ring-slate-600/20` : "bg-slate-50 text-slate-700 ring-slate-600/20"
                     )}>
                       {log.action}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-mono text-xs font-bold text-[#0F172A]">{log.order}</td>
+                  <td className="px-6 py-4 text-xs">
+                    <span className="font-mono font-bold text-[#0F172A] block">{log.order}</span>
+                    {log.details && <span className="text-[11px] text-slate-500 block mt-0.5">{log.details}</span>}
+                  </td>
                   <td className="px-6 py-4">
                     <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide",
                       (log.performedBy || log.by) === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
                     )}>{log.performedBy || log.by}</span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    {log.order && log.order !== "-" && !log.isReverted && log.action !== "Action Reverted" && onRevertActivity ? (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to REVERT "${log.action}" for ${log.order}?`)) {
+                            onRevertActivity(log.id);
+                          }
+                        }}
+                        className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 rounded-lg text-xs font-bold transition-all shadow-xs inline-flex items-center gap-1 active:scale-95"
+                      >
+                        <RotateCcw size={12} /> Undo
+                      </button>
+                    ) : log.isReverted ? (
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                        Reverted
+                      </span>
+                    ) : (
+                      <span className="text-slate-300 text-xs">-</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -6016,6 +6067,35 @@ export default function App() {
     }
   });
 
+  const revertActivityMut = useMutation({
+    mutationFn: async (activityId: string) => {
+      const res = await fetch(`/api/activities/${activityId}/revert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ performedBy: authUser?.username || "Staff Admin" })
+      });
+      const data = await safeResponseJson(res);
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to revert action");
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+      queryClient.invalidateQueries({ queryKey: ['product-sales-ledger'] });
+      showGlobalToast(`↺ ${data?.message || "Action reverted successfully!"}`, "success");
+    },
+    onError: (err: any) => {
+      showGlobalToast(err.message || "Failed to revert action", "error");
+    }
+  });
+
+  const handleRevertActivity = (activityId: string) => {
+    revertActivityMut.mutate(activityId);
+  };
+
   const handleViewOrder = (id: string) => {
     setSelectedOrderId(id);
     setScreen("order-detail");
@@ -6205,6 +6285,7 @@ export default function App() {
               setScreen={setScreen}
               onViewOrder={handleViewOrder}
               orders={orders}
+              onRevertActivity={handleRevertActivity}
             />
           )}
           {screen === "create-order" && (
@@ -6268,7 +6349,7 @@ export default function App() {
             />
           )}
           {screen === "daily-closing" && <DailyClosingScreen orders={orders} />}
-          {screen === "activity-log" && <ActivityLogScreen activityLogs={activityLogs} />}
+          {screen === "activity-log" && <ActivityLogScreen activityLogs={activityLogs} onRevertActivity={handleRevertActivity} />}
           {screen === "settings" && <SettingsScreen />}
         </main>
 
