@@ -96,23 +96,26 @@ async function safeResponseJson(res: Response) {
 
 // ─── Shared Components ─────────────────────────────────────────────────────────
 
+export const COURIER_OPTIONS = ["PostEx", "TCS", "Leopard", "M&P", "PakPost", "Local Rider", "Other"] as const;
+
 function StatusBadge({ status }: { status: OrderStatus | CODStatus }) {
+  const s = status ? String(status).toLowerCase() : "";
   const map: Record<string, string> = {
     pending: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20",
     processing: "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20",
     shipped: "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20",
     delivered: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20",
     returned: "bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20",
-    void: "bg-slate-50 text-slate-500 ring-1 ring-inset ring-slate-500/20",
+    void: "bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-300 font-bold line-through shadow-xs",
     received: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20",
   };
   const labels: Record<string, string> = {
     pending: "Pending", processing: "Processing", shipped: "Shipped",
-    delivered: "Delivered", returned: "Returned", void: "Void", received: "Received",
+    delivered: "Delivered", returned: "Returned", void: "VOID", received: "Received",
   };
   return (
-    <span className={cn("inline-flex items-center px-2 py-[2px] rounded-md text-[11px] font-medium tracking-wide", map[status])}>
-      {labels[status]}
+    <span className={cn("inline-flex items-center px-2 py-[2px] rounded-md text-[11px] font-medium tracking-wide", map[s] || "bg-slate-100 text-slate-700")}>
+      {labels[s] || status}
     </span>
   );
 }
@@ -190,6 +193,146 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
         <div className="p-6 overflow-y-auto">{children}</div>
       </div>
     </div>
+  );
+}
+
+function EditTrackingModal({
+  open,
+  order,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  order: Order | null;
+  onClose: () => void;
+  onSave: (orderId: string, courier: string, trackingNo: string, trackingNo2?: string, pin?: string) => Promise<void> | void;
+}) {
+  const [courier, setCourier] = useState("PostEx");
+  const [trackingNo, setTrackingNo] = useState("");
+  const [trackingNo2, setTrackingNo2] = useState("");
+  const [pin, setPin] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    if (order) {
+      setCourier(order.courier || "PostEx");
+      setTrackingNo(order.trackingNo || "");
+      setTrackingNo2("");
+      setPin("");
+      setErrorMsg("");
+    }
+  }, [order]);
+
+  if (!open || !order) return null;
+
+  const isDeliveredOrReceived = Boolean(order.trackingNo && (order.status === "delivered" || order.codStatus === "received"));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trackingNo.trim()) {
+      setErrorMsg("Tracking Number or Rider Name is required.");
+      return;
+    }
+    if (isDeliveredOrReceived && !pin.trim()) {
+      setErrorMsg("Owner PIN (1234) is required for delivered / received orders.");
+      return;
+    }
+    setErrorMsg("");
+    setLoading(true);
+    try {
+      await onSave(order.id, courier, trackingNo.trim(), trackingNo2.trim() || undefined, pin.trim() || undefined);
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to update tracking number.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Edit Tracking: Order #${order.id}`}>
+      <form onSubmit={handleSubmit} className="space-y-4 font-sans text-xs">
+        {errorMsg && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg font-semibold">
+            {errorMsg}
+          </div>
+        )}
+
+        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1">
+          <div className="font-bold text-slate-800">{order.customer}</div>
+          <div className="text-slate-500">{order.city} • {order.whatsapp}</div>
+          <div className="text-slate-600 font-mono font-bold text-xs mt-1">Amount: {formatPKR(order.amount)}</div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="block font-bold text-slate-700 uppercase tracking-wider text-[11px]">Courier / Delivery Method</label>
+          <select
+            value={courier}
+            onChange={e => setCourier(e.target.value)}
+            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0F172A] bg-white font-medium"
+          >
+            {COURIER_OPTIONS.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="block font-bold text-slate-700 uppercase tracking-wider text-[11px]">
+            {courier === "Local Rider" ? "Rider Name / Ref" : "Tracking Number"}
+          </label>
+          <input
+            type="text"
+            value={trackingNo}
+            onChange={e => setTrackingNo(e.target.value)}
+            placeholder={courier === "Local Rider" ? "e.g. Javed (Rider)" : "Enter tracking number"}
+            required
+            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-[#0F172A] bg-white"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="block font-bold text-slate-700 uppercase tracking-wider text-[11px]">Secondary Tracking Number (Optional)</label>
+          <input
+            type="text"
+            value={trackingNo2}
+            onChange={e => setTrackingNo2(e.target.value)}
+            placeholder="Secondary tracking (if applicable)"
+            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-[#0F172A] bg-white"
+          />
+        </div>
+
+        {isDeliveredOrReceived && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+            <div className="font-bold text-amber-900 flex items-center gap-1.5">
+              <AlertCircle size={14} className="text-amber-700" />
+              <span>Owner PIN Required</span>
+            </div>
+            <p className="text-[11px] text-amber-800">
+              This order is already <strong>{order.status.toUpperCase()}</strong>. Enter Owner PIN (1234) to authorize tracking update.
+            </p>
+            <input
+              type="password"
+              value={pin}
+              onChange={e => setPin(e.target.value)}
+              placeholder="Enter Owner PIN (1234)"
+              required
+              className="w-full px-3 py-2 text-xs border border-amber-300 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+            />
+          </div>
+        )}
+
+        <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+          <Btn variant="secondary" onClick={onClose} disabled={loading}>
+            Cancel
+          </Btn>
+          <Btn type="submit" disabled={loading}>
+            {loading ? "Updating..." : "Save Tracking"}
+          </Btn>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -1320,13 +1463,14 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
 
 // ─── COD Parcels Screen ────────────────────────────────────────────────────────
 
-function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, onUpdateStatus, onReceiveCOD }: {
+function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, onUpdateStatus, onReceiveCOD, onEditTracking }: {
   setScreen: (s: Screen) => void;
   onViewOrder: (id: string) => void;
   onEditOrder: (id: string) => void;
   onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
   onUpdateStatus?: (id: string, status: OrderStatus, hasTracking?: boolean) => void;
   onReceiveCOD?: (id: string, date: string, hasTracking?: boolean) => void;
+  onEditTracking?: (order: any) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [codStatusFilter, setCodStatusFilter] = useState<string>("all");
@@ -1524,11 +1668,7 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
             className="text-xs py-1.5 w-auto"
           >
             <option value="all">All Couriers</option>
-            <option value="PostEx">PostEx</option>
-            <option value="TCS">TCS</option>
-            <option value="Leopard">Leopard</option>
-            <option value="PakPost">PakPost</option>
-            <option value="Other">Other</option>
+            {COURIER_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
           </FieldSelect>
         </div>
 
@@ -1564,100 +1704,120 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-sans">
-                {filtered.map((o: any) => (
-                  <tr key={o.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-[#0F172A]">
-                      <button onClick={() => onViewOrder(o.id)} className="hover:underline text-indigo-600">
-                        {o.id}
-                      </button>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-slate-800">{o.customer}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{o.whatsapp}</div>
-                    </td>
-                    <td className="py-3 px-4 max-w-[180px]">
-                      <div className="truncate text-slate-700">{o.address}</div>
-                      <div className="text-[11px] text-slate-400">{o.city}</div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="text-slate-700 max-w-[160px] truncate">
-                        {o.products.map((p: any) => `${p.name} (${p.qty})`).join(', ')}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{o.date}</td>
-                    <td className="py-3 px-4 text-right font-mono whitespace-nowrap">
-                      <div className="text-slate-900 font-bold text-xs">{formatPKR(o.amount)}</div>
-                      {o.advancePayment > 0 ? (
-                        <div className="text-[10px] font-sans">
-                          <span className="text-emerald-700 font-medium">Adv: -{formatPKR(o.advancePayment)}</span>
-                          <div className="font-mono font-bold text-[#D4AF37]">{formatPKR(Math.max(0, o.amount - o.advancePayment))} COD</div>
+                {filtered.map((o: any) => {
+                  const isVoid = String(o.status).toLowerCase() === "void";
+                  return (
+                    <tr key={o.id} className={cn("hover:bg-slate-50/80 transition-colors", isVoid && "opacity-50 bg-slate-100/70 select-none")}>
+                      <td className="py-3 px-4 font-mono font-bold text-[#0F172A]">
+                        <button onClick={() => onViewOrder(o.id)} className="hover:underline text-indigo-600">
+                          {o.id}
+                        </button>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-slate-800">{o.customer}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">{o.whatsapp}</div>
+                      </td>
+                      <td className="py-3 px-4 max-w-[180px]">
+                        <div className="truncate text-slate-700">{o.address}</div>
+                        <div className="text-[11px] text-slate-400">{o.city}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="text-slate-700 max-w-[160px] truncate">
+                          {o.products.map((p: any) => `${p.name} (${p.qty})`).join(', ')}
                         </div>
-                      ) : (
-                        <div className="text-[10px] text-slate-400 font-sans">Full COD</div>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 font-mono">
-                      {o.trackingNo ? (
-                        <div>
-                          <div className="font-semibold text-slate-800">{o.trackingNo}</div>
-                          <div className="text-[10px] text-indigo-600 font-bold uppercase">{o.courier}</div>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 font-bold text-[11px] rounded-md border border-amber-200 shadow-sm whitespace-nowrap">
-                          <Clock size={12} className="text-amber-600" /> Awaiting Tracking Number
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
-                    <td className="py-3 px-4"><StatusBadge status={o.codStatus} /></td>
-                    <td className="py-3 px-4 text-right whitespace-nowrap space-x-1">
-                      <button onClick={() => onViewOrder(o.id)} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200" title="View Order">
-                        <Eye size={14} />
-                      </button>
-                      <button onClick={() => onEditOrder(o.id)} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200" title="Edit Order">
-                        <Edit2 size={14} />
-                      </button>
-                      {o.status !== "delivered" && onUpdateStatus && (
-                        <button
-                          onClick={() => onUpdateStatus(o._id || o.id, "delivered", Boolean(o.trackingNo))}
-                          className={cn(
-                            "p-1 rounded border inline-flex transition-all",
-                            o.trackingNo 
-                              ? "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200" 
-                              : "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
-                          )}
-                          title={o.trackingNo ? "Mark as Delivered" : "Tracking Number required before marking Delivered"}
-                        >
-                          <CheckCircle2 size={14} />
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{o.date}</td>
+                      <td className="py-3 px-4 text-right font-mono whitespace-nowrap">
+                        <div className="text-slate-900 font-bold text-xs">{formatPKR(o.amount)}</div>
+                        {o.advancePayment > 0 ? (
+                          <div className="text-[10px] font-sans">
+                            <span className="text-emerald-700 font-medium">Adv: -{formatPKR(o.advancePayment)}</span>
+                            <div className="font-mono font-bold text-[#D4AF37]">{formatPKR(Math.max(0, o.amount - o.advancePayment))} COD</div>
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-slate-400 font-sans">Full COD</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-mono">
+                        {o.trackingNo ? (
+                          <div className="flex items-center gap-1.5 justify-between">
+                            <div>
+                              <div className="font-semibold text-slate-800">{o.trackingNo}</div>
+                              <div className="text-[10px] text-indigo-600 font-bold uppercase">{o.courier}</div>
+                            </div>
+                            {onEditTracking && !isVoid && (
+                              <button onClick={() => onEditTracking(o)} className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100" title="Edit Tracking">
+                                <Edit2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 justify-between">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 font-bold text-[10px] rounded-md border border-amber-200 shadow-sm whitespace-nowrap">
+                              <Clock size={11} className="text-amber-600" /> Awaiting Tracking
+                            </span>
+                            {onEditTracking && !isVoid && (
+                              <button onClick={() => onEditTracking(o)} className="p-1 text-amber-600 hover:text-amber-800 rounded hover:bg-amber-100" title="Add Tracking">
+                                <Plus size={12} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
+                      <td className="py-3 px-4"><StatusBadge status={o.codStatus} /></td>
+                      <td className="py-3 px-4 text-right whitespace-nowrap space-x-1">
+                        <button onClick={() => onViewOrder(o.id)} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200" title="View Order">
+                          <Eye size={14} />
                         </button>
-                      )}
-                      {o.status !== "returned" && o.status !== "delivered" && onUpdateStatus && (
-                        <button
-                          onClick={() => onUpdateStatus(o._id || o.id, "returned", Boolean(o.trackingNo))}
-                          className="p-1 text-rose-600 hover:text-rose-800 rounded hover:bg-rose-50 border border-rose-200 inline-flex"
-                          title="Mark as Returned"
-                        >
-                          <XCircle size={14} />
+                        <button onClick={() => !isVoid && onEditOrder(o.id)} disabled={isVoid} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200 disabled:opacity-40" title={isVoid ? "Parcel is VOID" : "Edit Order"}>
+                          <Edit2 size={14} />
                         </button>
-                      )}
-                      {o.codStatus === "pending" && onReceiveCOD && (
-                        <button
-                          onClick={() => onReceiveCOD(o._id || o.id, new Date().toISOString().split('T')[0], Boolean(o.trackingNo))}
-                          className={cn(
-                            "px-1.5 py-0.5 rounded font-bold text-[10px] inline-flex items-center gap-1 shadow-sm transition-all",
-                            o.trackingNo
-                              ? "text-amber-700 hover:text-amber-900 hover:bg-amber-100 bg-amber-50 border border-amber-300"
-                              : "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
-                          )}
-                          title={o.trackingNo ? "Mark COD Cash Received" : "Tracking Number required before receiving COD"}
-                        >
-                          <Banknote size={12} />
-                          <span>Receive</span>
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        {o.status !== "delivered" && onUpdateStatus && (
+                          <button
+                            onClick={() => !isVoid && onUpdateStatus(o._id || o.id, "delivered", Boolean(o.trackingNo))}
+                            disabled={isVoid}
+                            className={cn(
+                              "p-1 rounded border inline-flex transition-all",
+                              o.trackingNo && !isVoid 
+                                ? "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200" 
+                                : "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                            )}
+                            title={isVoid ? "Parcel is VOID" : (o.trackingNo ? "Mark as Delivered" : "Tracking Number required before marking Delivered")}
+                          >
+                            <CheckCircle2 size={14} />
+                          </button>
+                        )}
+                        {o.status !== "returned" && o.status !== "delivered" && onUpdateStatus && (
+                          <button
+                            onClick={() => !isVoid && onUpdateStatus(o._id || o.id, "returned", Boolean(o.trackingNo))}
+                            disabled={isVoid}
+                            className="p-1 text-rose-600 hover:text-rose-800 rounded hover:bg-rose-50 border border-rose-200 inline-flex disabled:opacity-40"
+                            title={isVoid ? "Parcel is VOID" : "Mark as Returned"}
+                          >
+                            <XCircle size={14} />
+                          </button>
+                        )}
+                        {o.codStatus === "pending" && onReceiveCOD && (
+                          <button
+                            onClick={() => !isVoid && onReceiveCOD(o._id || o.id, new Date().toISOString().split('T')[0], Boolean(o.trackingNo))}
+                            disabled={isVoid}
+                            className={cn(
+                              "px-1.5 py-0.5 rounded font-bold text-[10px] inline-flex items-center gap-1 shadow-sm transition-all",
+                              o.trackingNo && !isVoid
+                                ? "text-amber-700 hover:text-amber-900 hover:bg-amber-100 bg-amber-50 border border-amber-300"
+                                : "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                            )}
+                            title={isVoid ? "Parcel is VOID" : (o.trackingNo ? "Mark COD Cash Received" : "Tracking Number required before receiving COD")}
+                          >
+                            <Banknote size={12} />
+                            <span>Receive</span>
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1669,12 +1829,13 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
 
 // ─── Non-COD Parcels Screen ────────────────────────────────────────────────────
 
-function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, onUpdateStatus }: {
+function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, onUpdateStatus, onEditTracking }: {
   setScreen: (s: Screen) => void;
   onViewOrder: (id: string) => void;
   onEditOrder: (id: string) => void;
   onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
   onUpdateStatus?: (id: string, status: OrderStatus, hasTracking?: boolean) => void;
+  onEditTracking?: (order: any) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [courierFilter, setCourierFilter] = useState<string>("all");
@@ -1845,11 +2006,7 @@ function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder,
             className="text-xs py-1.5 w-auto"
           >
             <option value="all">All Couriers</option>
-            <option value="PostEx">PostEx</option>
-            <option value="TCS">TCS</option>
-            <option value="Leopard">Leopard</option>
-            <option value="PakPost">PakPost</option>
-            <option value="Other">Other</option>
+            {COURIER_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
           </FieldSelect>
         </div>
 
@@ -1885,82 +2042,101 @@ function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder,
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-sans">
-                {filtered.map((o: any) => (
-                  <tr key={o.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-[#0F172A]">
-                      <button onClick={() => onViewOrder(o.id)} className="hover:underline text-indigo-600">
-                        {o.id}
-                      </button>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-slate-800">{o.customer}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{o.whatsapp}</div>
-                    </td>
-                    <td className="py-3 px-4 max-w-[180px]">
-                      <div className="truncate text-slate-700">{o.address}</div>
-                      <div className="text-[11px] text-slate-400">{o.city}</div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="text-slate-700 max-w-[160px] truncate">
-                        {o.products.map((p: any) => `${p.name} (${p.qty})`).join(', ')}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{o.date}</td>
-                    <td className="py-3 px-4 text-right font-mono whitespace-nowrap">
-                      <div className="text-indigo-700 font-bold text-xs">{formatPKR(o.amount)}</div>
-                      <div className="text-[10px] text-emerald-600 font-sans font-semibold">100% Prepaid</div>
-                    </td>
-                    <td className="py-3 px-4 font-medium text-slate-700">
-                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[11px] font-bold">
-                        {o.paymentType || "Online"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-mono">
-                      {o.trackingNo ? (
-                        <div>
-                          <div className="font-semibold text-slate-800">{o.trackingNo}</div>
-                          <div className="text-[10px] text-indigo-600 font-bold uppercase">{o.courier}</div>
+                {filtered.map((o: any) => {
+                  const isVoid = String(o.status).toLowerCase() === "void";
+                  return (
+                    <tr key={o.id} className={cn("hover:bg-slate-50/80 transition-colors", isVoid && "opacity-50 bg-slate-100/70 select-none")}>
+                      <td className="py-3 px-4 font-mono font-bold text-[#0F172A]">
+                        <button onClick={() => onViewOrder(o.id)} className="hover:underline text-indigo-600">
+                          {o.id}
+                        </button>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-slate-800">{o.customer}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">{o.whatsapp}</div>
+                      </td>
+                      <td className="py-3 px-4 max-w-[180px]">
+                        <div className="truncate text-slate-700">{o.address}</div>
+                        <div className="text-[11px] text-slate-400">{o.city}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="text-slate-700 max-w-[160px] truncate">
+                          {o.products.map((p: any) => `${p.name} (${p.qty})`).join(', ')}
                         </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 font-bold text-[11px] rounded-md border border-amber-200 shadow-sm whitespace-nowrap">
-                          <Clock size={12} className="text-amber-600" /> Awaiting Tracking Number
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{o.date}</td>
+                      <td className="py-3 px-4 text-right font-mono whitespace-nowrap">
+                        <div className="text-indigo-700 font-bold text-xs">{formatPKR(o.amount)}</div>
+                        <div className="text-[10px] text-emerald-600 font-sans font-semibold">100% Prepaid</div>
+                      </td>
+                      <td className="py-3 px-4 font-medium text-slate-700">
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[11px] font-bold">
+                          {o.paymentType || "Online"}
                         </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
-                    <td className="py-3 px-4 text-right whitespace-nowrap space-x-1">
-                      <button onClick={() => onViewOrder(o.id)} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200" title="View Order">
-                        <Eye size={14} />
-                      </button>
-                      <button onClick={() => onEditOrder(o.id)} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200" title="Edit Order">
-                        <Edit2 size={14} />
-                      </button>
-                      {o.status !== "delivered" && onUpdateStatus && (
-                        <button
-                          onClick={() => onUpdateStatus(o._id || o.id, "delivered", Boolean(o.trackingNo))}
-                          className={cn(
-                            "p-1 rounded border inline-flex transition-all",
-                            o.trackingNo 
-                              ? "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200" 
-                              : "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
-                          )}
-                          title={o.trackingNo ? "Mark as Delivered" : "Tracking Number required before marking Delivered"}
-                        >
-                          <CheckCircle2 size={14} />
+                      </td>
+                      <td className="py-3 px-4 font-mono">
+                        {o.trackingNo ? (
+                          <div className="flex items-center gap-1.5 justify-between">
+                            <div>
+                              <div className="font-semibold text-slate-800">{o.trackingNo}</div>
+                              <div className="text-[10px] text-indigo-600 font-bold uppercase">{o.courier}</div>
+                            </div>
+                            {onEditTracking && !isVoid && (
+                              <button onClick={() => onEditTracking(o)} className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100" title="Edit Tracking">
+                                <Edit2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 justify-between">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 font-bold text-[10px] rounded-md border border-amber-200 shadow-sm whitespace-nowrap">
+                              <Clock size={11} className="text-amber-600" /> Awaiting Tracking
+                            </span>
+                            {onEditTracking && !isVoid && (
+                              <button onClick={() => onEditTracking(o)} className="p-1 text-amber-600 hover:text-amber-800 rounded hover:bg-amber-100" title="Add Tracking">
+                                <Plus size={12} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
+                      <td className="py-3 px-4 text-right whitespace-nowrap space-x-1">
+                        <button onClick={() => onViewOrder(o.id)} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200" title="View Order">
+                          <Eye size={14} />
                         </button>
-                      )}
-                      {o.status !== "returned" && o.status !== "delivered" && onUpdateStatus && (
-                        <button
-                          onClick={() => onUpdateStatus(o._id || o.id, "returned", Boolean(o.trackingNo))}
-                          className="p-1 text-rose-600 hover:text-rose-800 rounded hover:bg-rose-50 border border-rose-200 inline-flex"
-                          title="Mark as Returned"
-                        >
-                          <XCircle size={14} />
+                        <button onClick={() => !isVoid && onEditOrder(o.id)} disabled={isVoid} className="p-1 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-200 disabled:opacity-40" title={isVoid ? "Parcel is VOID" : "Edit Order"}>
+                          <Edit2 size={14} />
                         </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        {o.status !== "delivered" && onUpdateStatus && (
+                          <button
+                            onClick={() => !isVoid && onUpdateStatus(o._id || o.id, "delivered", Boolean(o.trackingNo))}
+                            disabled={isVoid}
+                            className={cn(
+                              "p-1 rounded border inline-flex transition-all",
+                              o.trackingNo && !isVoid
+                                ? "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200" 
+                                : "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                            )}
+                            title={isVoid ? "Parcel is VOID" : (o.trackingNo ? "Mark as Delivered" : "Tracking Number required before marking Delivered")}
+                          >
+                            <CheckCircle2 size={14} />
+                          </button>
+                        )}
+                        {o.status !== "returned" && o.status !== "delivered" && onUpdateStatus && (
+                          <button
+                            onClick={() => !isVoid && onUpdateStatus(o._id || o.id, "returned", Boolean(o.trackingNo))}
+                            disabled={isVoid}
+                            className="p-1 text-rose-600 hover:text-rose-800 rounded hover:bg-rose-50 border border-rose-200 inline-flex disabled:opacity-40"
+                            title={isVoid ? "Parcel is VOID" : "Mark as Returned"}
+                          >
+                            <XCircle size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -2742,6 +2918,7 @@ function OrdersScreen({
   orders,
   onVoidOrder,
   onUpdateStatus,
+  onEditTracking,
 }: {
   setScreen: (s: Screen) => void;
   onViewOrder: (id: string) => void;
@@ -2749,6 +2926,7 @@ function OrdersScreen({
   orders: Order[];
   onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
   onUpdateStatus?: (id: string, status: OrderStatus, hasTracking?: boolean) => void;
+  onEditTracking?: (order: any) => void;
 }) {
   const [orderTypeFilter, setOrderTypeFilter] = useState<"all" | "COD" | "NON-COD">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -2933,7 +3111,7 @@ function OrdersScreen({
         <select value={courierFilter} onChange={e => setCourierFilter(e.target.value)}
           className="px-3.5 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 focus:border-[#0F172A] transition-colors hover:border-slate-300">
           <option value="all">All Couriers</option>
-          {["TCS","PostEx","Leopard","M&P","Pakistan Post","Other"].map(c => <option key={c} value={c}>{c}</option>)}
+          {COURIER_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
 
         <select value={codStatusFilter} onChange={e => setCODStatusFilter(e.target.value)}
@@ -2981,6 +3159,7 @@ function OrdersScreen({
                 <th className="text-left px-6 py-3 hidden md:table-cell">WhatsApp</th>
                 <th className="text-right px-6 py-3">Amount</th>
                 <th className="text-left px-6 py-3 hidden sm:table-cell">Agent</th>
+                <th className="text-left px-6 py-3">Tracking / Courier</th>
                 <th className="text-left px-6 py-3">Status</th>
                 <th className="text-left px-6 py-3 hidden lg:table-cell">Date</th>
                 <th className="text-right px-6 py-3">Actions</th>
@@ -2989,8 +3168,9 @@ function OrdersScreen({
             <tbody className="divide-y divide-slate-100">
               {filtered.map(o => {
                 const status = o.status;
+                const isVoid = String(status).toLowerCase() === "void";
                 return (
-                  <tr key={o.id} className="hover:bg-slate-50 transition-colors group">
+                  <tr key={o.id} className={cn("hover:bg-slate-50 transition-colors group", isVoid && "opacity-50 bg-slate-100/70 select-none")}>
                     <td className="px-6 py-4 w-14">
                       <input type="checkbox"
                         checked={selectedIds.has(o.id)}
@@ -3024,6 +3204,32 @@ function OrdersScreen({
                         o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
                       )}>{o.handledBy}</span>
                     </td>
+                    <td className="px-6 py-4 font-mono text-xs">
+                      {o.trackingNo ? (
+                        <div className="flex items-center gap-1.5 justify-between">
+                          <div>
+                            <div className="font-semibold text-slate-800">{o.trackingNo}</div>
+                            <div className="text-[10px] text-indigo-600 font-bold uppercase">{o.courier}</div>
+                          </div>
+                          {onEditTracking && !isVoid && (
+                            <button onClick={() => onEditTracking(o)} className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100" title="Edit Tracking">
+                              <Edit2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 justify-between">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 font-bold text-[10px] rounded-md border border-amber-200 shadow-sm whitespace-nowrap">
+                            <Clock size={11} className="text-amber-600" /> Awaiting Tracking
+                          </span>
+                          {onEditTracking && !isVoid && (
+                            <button onClick={() => onEditTracking(o)} className="p-1 text-amber-600 hover:text-amber-800 rounded hover:bg-amber-100" title="Add Tracking">
+                              <Plus size={12} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4"><StatusBadge status={status} /></td>
                     <td className="px-6 py-4 text-sm text-slate-500 hidden lg:table-cell whitespace-nowrap">{o.date}</td>
                     <td className="px-6 py-4">
@@ -3032,8 +3238,8 @@ function OrdersScreen({
                           className="p-1.5 rounded-md hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-sm text-slate-400 hover:text-[#0F172A] transition-all" title="View">
                           <Eye size={14} />
                         </button>
-                        <button onClick={() => onEditOrder(o.id)}
-                          className="p-1.5 rounded-md hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-sm text-slate-400 hover:text-blue-600 transition-all" title="Edit">
+                        <button onClick={() => !isVoid && onEditOrder(o.id)} disabled={isVoid}
+                          className="p-1.5 rounded-md hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-sm text-slate-400 hover:text-blue-600 transition-all disabled:opacity-40" title={isVoid ? "Parcel is VOID" : "Edit"}>
                           <Edit2 size={14} />
                         </button>
                         {status !== "delivered" && onUpdateStatus && (
@@ -3438,7 +3644,12 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
 
 // ─── Tracking Screen ──────────────────────────────────────────────────────────
 
-function TrackingScreen({ orders, onSaveTracking, onUpdateStatus }: { orders: Order[]; onSaveTracking: (id: string, courier: string, no: string, no2?: string) => void; onUpdateStatus: (id: string, status: OrderStatus) => void; }) {
+function TrackingScreen({ orders, onSaveTracking, onUpdateStatus, onEditTracking }: {
+  orders: Order[];
+  onSaveTracking: (id: string, courier: string, no: string, no2?: string) => void;
+  onUpdateStatus: (id: string, status: OrderStatus) => void;
+  onEditTracking?: (order: any) => void;
+}) {
   const [tab, setTab] = useState<"awaiting" | "added">("awaiting");
   const [awaitingSubTab, setAwaitingSubTab] = useState<"COD" | "NON-COD" | "all">("COD");
   const [inputs, setInputs] = useState<Record<string, { courier: string; no: string; no2?: string }>>({});
@@ -3534,7 +3745,7 @@ function TrackingScreen({ orders, onSaveTracking, onUpdateStatus }: { orders: Or
                       <th className="text-left px-6 py-3">Customer</th>
                       <th className="text-right px-6 py-3 hidden md:table-cell">Amount</th>
                       <th className="text-left px-6 py-3 w-40">Courier</th>
-                      <th className="text-left px-6 py-3">Tracking No</th>
+                      <th className="text-left px-6 py-3">Tracking No / Rider</th>
                       <th className="text-left px-6 py-3 w-44">Receipt Upload</th>
                       <th className="px-6 py-3 w-28"></th>
                     </tr>
@@ -3551,21 +3762,21 @@ function TrackingScreen({ orders, onSaveTracking, onUpdateStatus }: { orders: Or
                         <td className="px-6 py-4">
                           <select value={inputs[o.id]?.courier || ""}
                             onChange={e => set(o.id, "courier", e.target.value)}
-                            className="w-full px-2.5 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 transition-colors">
-                            <option value="">Select</option>
-                            {["TCS","PostEx","Leopard","M&P","Pakistan Post","Other"].map(c => <option key={c}>{c}</option>)}
+                            className="w-full px-2.5 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 transition-colors bg-white font-medium">
+                            <option value="">Select Courier</option>
+                            {COURIER_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </td>
                         <td className="px-6 py-4">
                           <input value={inputs[o.id]?.no || ""}
                             onChange={e => set(o.id, "no", e.target.value)}
-                            placeholder="Tracking number"
-                            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors" />
+                            placeholder={inputs[o.id]?.courier === "Local Rider" ? "Rider Name (e.g. Javed)" : "Enter tracking number"}
+                            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors bg-white" />
                           {inputs[o.id]?.courier && (
                             <input value={inputs[o.id]?.no2 || ""}
                               onChange={e => set(o.id, "no2", e.target.value)}
-                              placeholder="Tracking number 2 (optional)"
-                              className="w-full mt-2 px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors" />
+                              placeholder="Secondary tracking (optional)"
+                              className="w-full mt-2 px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono transition-colors bg-white" />
                           )}
                         </td>
                         <td className="px-6 py-4">
@@ -3605,19 +3816,21 @@ function TrackingScreen({ orders, onSaveTracking, onUpdateStatus }: { orders: Or
                           onChange={e => set(o.id, "courier", e.target.value)}
                           className="w-full px-2.5 py-2 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 bg-white">
                           <option value="">Select Courier</option>
-                          {["TCS","PostEx","Leopard","M&P","Pakistan Post","Other"].map(c => <option key={c}>{c}</option>)}
+                          {COURIER_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="text-[11px] font-medium text-slate-500 mb-1 block">Tracking Number</label>
+                        <label className="text-[11px] font-medium text-slate-500 mb-1 block">
+                          {inputs[o.id]?.courier === "Local Rider" ? "Rider Name / Ref" : "Tracking Number"}
+                        </label>
                         <input value={inputs[o.id]?.no || ""}
                           onChange={e => set(o.id, "no", e.target.value)}
-                          placeholder="Enter tracking number"
+                          placeholder={inputs[o.id]?.courier === "Local Rider" ? "Rider Name (e.g. Javed)" : "Enter tracking number"}
                           className="w-full px-2.5 py-2 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono bg-white" />
                         {inputs[o.id]?.courier && (
                           <input value={inputs[o.id]?.no2 || ""}
                             onChange={e => set(o.id, "no2", e.target.value)}
-                            placeholder="Tracking number 2 (optional)"
+                            placeholder="Secondary tracking (optional)"
                             className="w-full mt-2 px-2.5 py-2 text-xs border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-[#0F172A]/20 font-mono bg-white" />
                         )}
                       </div>
@@ -3653,7 +3866,7 @@ function TrackingScreen({ orders, onSaveTracking, onUpdateStatus }: { orders: Or
                   <th className="text-left px-6 py-3">Tracking No</th>
                   <th className="text-left px-6 py-3">Status</th>
                   <th className="text-right px-6 py-3 hidden md:table-cell">Amount</th>
-                  <th className="px-6 py-3 w-28"></th>
+                  <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -3668,13 +3881,24 @@ function TrackingScreen({ orders, onSaveTracking, onUpdateStatus }: { orders: Or
                     <td className="px-6 py-4 font-mono text-sm text-slate-700">{o.trackingNo || "—"}</td>
                     <td className="px-6 py-4"><StatusBadge status={o.status} /></td>
                     <td className="px-6 py-4 font-mono text-sm font-medium text-slate-900 text-right hidden md:table-cell">{formatPKR(o.amount)}</td>
-                    <td className="px-6 py-4 text-right">
-                      {o.status === "shipped" && (
-                        <div className="flex items-center gap-2 justify-end">
-                          <Btn size="sm" variant="secondary" className="px-2 py-1 bg-white hover:bg-emerald-50 border-emerald-200" onClick={() => onUpdateStatus(o.id, "delivered")} title="Mark Delivered"><CheckCircle2 size={14} className="text-emerald-600" /></Btn>
-                          <Btn size="sm" variant="secondary" className="px-2 py-1 bg-white hover:bg-orange-50 border-orange-200" onClick={() => onUpdateStatus(o.id, "returned")} title="Mark Returned"><XCircle size={14} className="text-orange-600" /></Btn>
-                        </div>
-                      )}
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <div className="flex items-center gap-2 justify-end">
+                        {onEditTracking && (
+                          <button
+                            onClick={() => onEditTracking(o)}
+                            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
+                            title="Edit Tracking Number / Courier"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        )}
+                        {o.status === "shipped" && (
+                          <>
+                            <Btn size="sm" variant="secondary" className="px-2 py-1 bg-white hover:bg-emerald-50 border-emerald-200" onClick={() => onUpdateStatus(o.id, "delivered")} title="Mark Delivered"><CheckCircle2 size={14} className="text-emerald-600" /></Btn>
+                            <Btn size="sm" variant="secondary" className="px-2 py-1 bg-white hover:bg-orange-50 border-orange-200" onClick={() => onUpdateStatus(o.id, "returned")} title="Mark Returned"><XCircle size={14} className="text-orange-600" /></Btn>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -5772,6 +5996,22 @@ export default function App() {
     }
   };
 
+  const [editingTrackingOrder, setEditingTrackingOrder] = useState<any>(null);
+
+  const handleSaveEditTracking = async (orderId: string, courier: string, trackingNo: string, trackingNo2?: string, pin?: string) => {
+    await updateOrderMut.mutateAsync({
+      id: orderId,
+      data: {
+        courierName: courier,
+        trackingNumber: trackingNo,
+        trackingNumber2: trackingNo2,
+        pin: pin,
+        actionName: "Tracking Details Updated"
+      }
+    });
+    setEditingTrackingOrder(null);
+  };
+
   const handleVoidOrder = (orderId: string, performer: "Sami" | "Abid") => {
     const pin = prompt("Enter Owner PIN to Void this order:");
     if (!pin) return;
@@ -5921,6 +6161,7 @@ export default function App() {
               onVoidOrder={handleVoidOrder}
               onUpdateStatus={handleUpdateStatus}
               onReceiveCOD={handleReceiveCOD}
+              onEditTracking={(order: any) => setEditingTrackingOrder(order)}
             />
           )}
           {screen === "non-cod-parcels" && (
@@ -5930,6 +6171,7 @@ export default function App() {
               onEditOrder={handleEditOrder}
               onVoidOrder={handleVoidOrder}
               onUpdateStatus={handleUpdateStatus}
+              onEditTracking={(order: any) => setEditingTrackingOrder(order)}
             />
           )}
           {screen === "orders" && (
@@ -5940,10 +6182,18 @@ export default function App() {
               orders={orders}
               onVoidOrder={handleVoidOrder}
               onUpdateStatus={handleUpdateStatus}
+              onEditTracking={(order: any) => setEditingTrackingOrder(order)}
             />
           )}
           {screen === "order-detail" && <OrderDetailScreen orderId={selectedOrderId} setScreen={setScreen} orders={orders} />}
-          {screen === "tracking" && <TrackingScreen orders={orders} onSaveTracking={handleSaveTracking} onUpdateStatus={handleUpdateStatus} />}
+          {screen === "tracking" && (
+            <TrackingScreen
+              orders={orders}
+              onSaveTracking={handleSaveTracking}
+              onUpdateStatus={handleUpdateStatus}
+              onEditTracking={(order: any) => setEditingTrackingOrder(order)}
+            />
+          )}
           {screen === "cod" && <CODScreen orders={orders} onReceiveCOD={handleReceiveCOD} />}
           {screen === "settlements" && <SettlementsScreen />}
           {screen === "reports" && <ProductSalesLedgerScreen setScreen={setScreen} onViewOrder={handleViewOrder} />}
@@ -6097,6 +6347,13 @@ export default function App() {
           </div>
         </Modal>
       )}
+
+      <EditTrackingModal
+        open={Boolean(editingTrackingOrder)}
+        order={editingTrackingOrder}
+        onClose={() => setEditingTrackingOrder(null)}
+        onSave={handleSaveEditTracking}
+      />
     </div>
   );
 }
