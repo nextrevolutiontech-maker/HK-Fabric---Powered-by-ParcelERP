@@ -8,7 +8,7 @@ import {
   Eye, Edit2, Printer, Ban, CheckCircle2, Clock, AlertTriangle,
   TrendingUp, Upload, Download, User, Save, ArrowLeft, Check,
   AlertCircle, ChevronRight, Layers, XCircle, Calendar, LogOut,
-  Box, DollarSign, BarChart3, Activity
+  Box, DollarSign, BarChart3, Activity, Sun, Moon, Sunrise, Sunset
 } from "lucide-react";
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -955,6 +955,59 @@ function DuplicateWarningModal({
   );
 }
 
+function formatActivityTime(createdAt?: string | Date, fallbackTime?: string, fallbackDate?: string): string {
+  if (!createdAt && !fallbackTime) return "Just now";
+  
+  const d = createdAt ? new Date(createdAt) : null;
+  if (!d || isNaN(d.getTime())) {
+    if (fallbackTime && fallbackDate) return `${fallbackDate}, ${fallbackTime}`;
+    if (fallbackTime) return fallbackTime;
+    return "Just now";
+  }
+
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+
+  const timeStr = d.toLocaleTimeString("en-PK", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+
+  const isToday = d.toDateString() === now.toDateString();
+
+  if (isToday) {
+    if (diffMins >= 0 && diffMins < 1) return `Just now (${timeStr})`;
+    if (diffMins >= 1 && diffMins < 60) return `${diffMins}m ago (${timeStr})`;
+    return `Today, ${timeStr}`;
+  }
+
+  const dateStr = d.toLocaleDateString("en-PK", {
+    day: "numeric",
+    month: "short"
+  });
+
+  return `${dateStr}, ${timeStr}`;
+}
+
+function getDynamicGreeting(): { greeting: string; icon: "sunrise" | "sun" | "sunset" | "moon" } {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) {
+    return { greeting: "Good Morning", icon: "sunrise" };
+  }
+  if (hour === 12) {
+    return { greeting: "Good Noon", icon: "sun" };
+  }
+  if (hour > 12 && hour < 17) {
+    return { greeting: "Good Afternoon", icon: "sun" };
+  }
+  if (hour >= 17 && hour < 22) {
+    return { greeting: "Good Evening", icon: "sunset" };
+  }
+  return { greeting: "Good Night", icon: "moon" };
+}
+
 function DashboardScreen({ setScreen, onViewOrder, orders }: {
   setScreen: (s: Screen) => void;
   onViewOrder: (id: string) => void;
@@ -977,6 +1030,16 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
       return (await safeResponseJson(res)) || [];
     }
   });
+
+  const [greetingInfo, setGreetingInfo] = useState(() => getDynamicGreeting());
+
+  useEffect(() => {
+    setGreetingInfo(getDynamicGreeting());
+    const interval = setInterval(() => {
+      setGreetingInfo(getDynamicGreeting());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const codCount = stats?.cod?.count ?? orders.filter(o => o.type === "COD" && o.status !== "void").length;
   const codSales = stats?.cod?.sales ?? orders.filter(o => o.type === "COD" && o.status !== "void").reduce((a, b) => a + b.amount, 0);
@@ -1005,13 +1068,6 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
     return Object.values(map).slice(-7);
   }, [orders]);
 
-  const greetingTime = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
-  }, []);
-
   const todayFormatted = useMemo(() => {
     return new Date().toLocaleDateString("en-PK", {
       weekday: "long",
@@ -1027,7 +1083,13 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] tracking-tight">{greetingTime}, Admin</h1>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] tracking-tight flex items-center gap-2">
+              {greetingInfo.icon === "sunrise" && <Sunrise size={24} className="text-amber-500 flex-shrink-0 animate-pulse" />}
+              {greetingInfo.icon === "sun" && <Sun size={24} className="text-amber-500 flex-shrink-0" />}
+              {greetingInfo.icon === "sunset" && <Sunset size={24} className="text-orange-500 flex-shrink-0" />}
+              {greetingInfo.icon === "moon" && <Moon size={24} className="text-indigo-400 flex-shrink-0" />}
+              <span>{greetingInfo.greeting}, Ahsan</span>
+            </h1>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 font-mono">
               Live Operations
             </span>
@@ -1445,8 +1507,8 @@ function DashboardScreen({ setScreen, onViewOrder, orders }: {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-800 truncate">{log.action || "Activity"}</span>
-                      <span className="text-[9px] text-slate-400 font-mono">
-                        {log.createdAt ? new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
+                      <span className="text-[9px] text-slate-500 font-mono font-medium ml-2 flex-shrink-0">
+                        {formatActivityTime(log.createdAt, log.time, log.date)}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 truncate mt-0.5">{log.details || log.performedBy || "Staff Action"}</p>
@@ -5792,6 +5854,7 @@ export default function App() {
         date: new Date(o.createdAt).toISOString().split('T')[0],
         courier: o.trackingEntries?.[0]?.courierName,
         trackingNo: o.trackingEntries?.[0]?.trackingNumber,
+        trackingNo2: o.trackingEntries?.[1]?.trackingNumber,
         products: o.items?.map((i: any) => ({ name: i.productName, qty: i.qty, price: i.unitPrice })) || [],
         type: o.orderType,
         notes: o.notes,

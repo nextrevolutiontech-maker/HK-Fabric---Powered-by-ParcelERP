@@ -160,7 +160,7 @@ export const OrderService = {
       include: {
         customer: true,
         items: true,
-        trackingEntries: true,
+        trackingEntries: { orderBy: { createdAt: 'desc' } },
         codPayments: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -193,7 +193,7 @@ export const OrderService = {
       include: {
         customer: true,
         items: true,
-        trackingEntries: true,
+        trackingEntries: { orderBy: { createdAt: 'desc' } },
         codPayments: true,
       }
     });
@@ -616,12 +616,14 @@ export const OrderService = {
           { orderNo: id }
         ]
       },
-      include: { customer: true, trackingEntries: true }
+      include: { customer: true, trackingEntries: { orderBy: { createdAt: 'desc' } } }
     });
 
     if (!existingOrder) {
       throw new Error('Order not found');
     }
+
+    const targetId = existingOrder.id;
 
     if (status === 'void' || status === 'VOID') {
       const isPinValid = await verifyOwnerPin(pin);
@@ -646,7 +648,7 @@ export const OrderService = {
       throw new Error(`Cannot set Order #${existingOrder.orderNo} to ${targetStatus.toUpperCase()} because no Tracking Number or Courier has been assigned yet. Please assign tracking first.`);
     }
 
-    const isTrackingBeingModified = Boolean(trackingNumber || trackingNumber2 || courierName);
+    const isTrackingBeingModified = trackingNumber !== undefined || trackingNumber2 !== undefined || courierName !== undefined;
     if (isTrackingBeingModified) {
       if (existingOrder.status === 'void' || existingOrder.status === 'VOID') {
         throw new Error(`Cannot assign or edit tracking number on VOID Order #${existingOrder.orderNo}.`);
@@ -661,19 +663,19 @@ export const OrderService = {
       }
     }
 
-    if (trackingNumber && !validateTrackingFormat(trackingNumber)) {
+    if (trackingNumber && trackingNumber.trim() && !validateTrackingFormat(trackingNumber)) {
       throw new Error(`Invalid tracking number format: "${trackingNumber}". Tracking numbers must be 4-50 alphanumeric characters.`);
     }
-    if (trackingNumber2 && !validateTrackingFormat(trackingNumber2)) {
+    if (trackingNumber2 && trackingNumber2.trim() && !validateTrackingFormat(trackingNumber2)) {
       throw new Error(`Invalid secondary tracking number format: "${trackingNumber2}".`);
     }
 
-    if (trackingNumber) {
+    if (trackingNumber && trackingNumber.trim()) {
       const normalizedTrack = normalizeTracking(trackingNumber);
       const existingEntry = await prisma.trackingEntry.findFirst({
         where: { 
           trackingNumber: normalizedTrack,
-          orderId: { not: id }
+          orderId: { not: targetId }
         },
         include: { order: { include: { customer: true } } }
       });
@@ -692,12 +694,12 @@ export const OrderService = {
       }
     }
 
-    if (trackingNumber2) {
+    if (trackingNumber2 && trackingNumber2.trim()) {
       const normalizedTrack2 = normalizeTracking(trackingNumber2);
       const existingEntry2 = await prisma.trackingEntry.findFirst({
         where: { 
           trackingNumber: normalizedTrack2,
-          orderId: { not: id }
+          orderId: { not: targetId }
         },
         include: { order: { include: { customer: true } } }
       });
@@ -760,7 +762,6 @@ export const OrderService = {
 
       const safeDelivery = updateData.deliveryCharges !== undefined ? updateData.deliveryCharges : existingOrder.deliveryCharges;
       const safeAdvance = updateData.advancePayment !== undefined ? updateData.advancePayment : existingOrder.advancePayment;
-      let targetOrderType = updateData.orderType !== undefined ? updateData.orderType : existingOrder.orderType;
 
       if (items && Array.isArray(items)) {
         let itemsSum = 0;
@@ -790,7 +791,7 @@ export const OrderService = {
         updateData.orderType = remAmount === 0 ? "NON-COD" : "COD";
         updateData.totalAmount = grandTotal;
       } else if (updateData.deliveryCharges !== undefined || updateData.advancePayment !== undefined || updateData.orderType !== undefined) {
-        const dbItems = await tx.orderItem.findMany({ where: { orderId: id } });
+        const dbItems = await tx.orderItem.findMany({ where: { orderId: targetId } });
         const itemsSum = dbItems.reduce((sum, i) => sum + i.lineTotal, 0);
         const grandTotal = itemsSum + safeDelivery;
         if (safeAdvance > grandTotal) {
@@ -802,50 +803,69 @@ export const OrderService = {
       }
 
       const updatedOrder = await tx.order.update({
-        where: { id },
+        where: { id: targetId },
         data: updateData,
-        include: { customer: true, items: true, trackingEntries: true }
+        include: { customer: true, items: true, trackingEntries: { orderBy: { createdAt: 'desc' } } }
       });
 
       const previousTrack = existingOrder.trackingEntries?.[0]?.trackingNumber || null;
-      if (trackingNumber && courierName) {
-        const normalizedTrack = normalizeTracking(trackingNumber);
-        await tx.trackingEntry.upsert({
-          where: { trackingNumber: normalizedTrack },
-          update: { courierName, orderId: id },
-          create: { orderId: id, courierName, trackingNumber: normalizedTrack }
-        });
+      const targetCourier = courierName || existingOrder.trackingEntries?.[0]?.courierName || 'Other';
 
-        if (updatedOrder.status === 'pending' || updatedOrder.status === 'CONFIRMED' || updatedOrder.status === 'processing') {
-          await tx.order.update({
-            where: { id },
-            data: { status: 'shipped' }
+      if (trackingNumber !== undefined) {
+        // Clear all previous tracking entries for this order so stale/wrong tracking numbers don't persist
+        await tx.trackingEntry.deleteMany({ where: { orderId: targetId } });
+
+        if (trackingNumber && trackingNumber.trim()) {
+          const normalizedTrack = normalizeTracking(trackingNumber);
+          await tx.trackingEntry.create({
+            data: {
+              orderId: targetId,
+              courierName: targetCourier,
+              trackingNumber: normalizedTrack
+            }
+          });
+
+          if (updatedOrder.status === 'pending' || updatedOrder.status === 'CONFIRMED' || updatedOrder.status === 'processing' || updatedOrder.status === 'confirmed') {
+            await tx.order.update({
+              where: { id: targetId },
+              data: { status: 'shipped' }
+            });
+          }
+        }
+
+        if (trackingNumber2 && trackingNumber2.trim()) {
+          const normalizedTrack2 = normalizeTracking(trackingNumber2);
+          await tx.trackingEntry.create({
+            data: {
+              orderId: targetId,
+              courierName: targetCourier,
+              trackingNumber: normalizedTrack2
+            }
           });
         }
-      }
-
-      if (trackingNumber2 && courierName) {
-        const normalizedTrack2 = normalizeTracking(trackingNumber2);
-        await tx.trackingEntry.upsert({
-          where: { trackingNumber: normalizedTrack2 },
-          update: { courierName, orderId: id },
-          create: { orderId: id, courierName, trackingNumber: normalizedTrack2 }
+      } else if (courierName && existingOrder.trackingEntries?.length > 0) {
+        await tx.trackingEntry.updateMany({
+          where: { orderId: targetId },
+          data: { courierName }
         });
       }
 
       const actionLabel = actionName || (trackingNumber ? "Tracking Assigned" : `Updated Order #${updatedOrder.orderNo}`);
       await tx.activity.create({
         data: {
-          orderId: id,
+          orderId: targetId,
           action: actionLabel,
           performedBy: performedBy || "System",
           oldValue: previousTrack ? `Tracking: ${previousTrack}` : `Status: ${existingOrder.status}`,
-          newValue: trackingNumber ? `Tracking: ${normalizeTracking(trackingNumber)} (${courierName})` : `Status: ${status || updatedOrder.status}`,
+          newValue: trackingNumber ? `Tracking: ${normalizeTracking(trackingNumber)} (${targetCourier})` : `Status: ${status || updatedOrder.status}`,
           details: `Order #${updatedOrder.orderNo} updated: ${actionLabel}`
         }
       });
 
-      return updatedOrder;
+      return tx.order.findUnique({
+        where: { id: targetId },
+        include: { customer: true, items: true, trackingEntries: { orderBy: { createdAt: 'desc' } } }
+      });
     });
   },
 
@@ -914,7 +934,7 @@ export const OrderService = {
       include: {
         customer: true,
         items: true,
-        trackingEntries: true,
+        trackingEntries: { orderBy: { createdAt: 'desc' } },
       },
       orderBy: { createdAt: 'desc' }
     });

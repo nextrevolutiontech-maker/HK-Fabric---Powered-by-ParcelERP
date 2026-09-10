@@ -16,14 +16,19 @@ export async function GET(request: Request) {
       take: 100,
     });
 
-    const formatted = activities.map(act => ({
-      id: act.id,
-      date: new Date(act.createdAt).toISOString().split('T')[0],
-      time: new Date(act.createdAt).toTimeString().split(' ')[0],
-      action: act.action,
-      order: act.orderId || "-",
-      performedBy: act.performedBy,
-    }));
+    const formatted = activities.map(act => {
+      const d = new Date(act.createdAt);
+      return {
+        id: act.id,
+        createdAt: act.createdAt,
+        date: d.toISOString().split('T')[0],
+        time: d.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        action: act.action,
+        order: act.orderId || "-",
+        performedBy: act.performedBy,
+        details: act.details || null,
+      };
+    });
 
     return NextResponse.json(formatted);
   } catch (error) {
