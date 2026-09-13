@@ -74,6 +74,31 @@ export function getPKTDateBounds(startDateStr?: string, endDateStr?: string) {
   return { startPKT, endPKT };
 }
 
+/**
+ * Calculates Pakistan Time (PKT, UTC+5) start and end boundaries for a specific month and year
+ */
+export function getPKTMonthBounds(year: number, month: number) {
+  // month is 1-indexed (1 = Jan, 12 = Dec)
+  const safeMonth = Math.max(1, Math.min(12, month));
+  const safeYear = Math.max(2000, year);
+
+  const startMonthStr = `${safeYear}-${String(safeMonth).padStart(2, '0')}-01`;
+  const lastDay = new Date(safeYear, safeMonth, 0).getDate();
+  const endMonthStr = `${safeYear}-${String(safeMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+  return getPKTDateBounds(startMonthStr, endMonthStr);
+}
+
+/**
+ * Calculates Pakistan Time (PKT, UTC+5) start and end boundaries for a full year
+ */
+export function getPKTYearBounds(year: number) {
+  const safeYear = Math.max(2000, year);
+  const startYearStr = `${safeYear}-01-01`;
+  const endYearStr = `${safeYear}-12-31`;
+  return getPKTDateBounds(startYearStr, endYearStr);
+}
+
 export const OrderService = {
   /**
    * Fetch orders with multi-field server-side search, database date filtering (PKT), and pagination
@@ -272,17 +297,29 @@ export const OrderService = {
   },
 
   /**
-   * Authoritative database-level stats aggregation for COD, Non-COD, and Overall metrics
+   * Authoritative database-level stats aggregation supporting Month, Year, and All-Time totals
    */
-  async getSystemStats(options: { startDateStr?: string; endDateStr?: string } = {}) {
-    const { startDateStr, endDateStr } = options;
-    const { startPKT, endPKT } = getPKTDateBounds(startDateStr, endDateStr);
-    
+  async getSystemStats(options: { startDateStr?: string; endDateStr?: string; year?: number; month?: number } = {}) {
+    const { startDateStr, endDateStr, year, month } = options;
+
+    let targetStartPKT: Date | undefined;
+    let targetEndPKT: Date | undefined;
+
+    if (year && month) {
+      const bounds = getPKTMonthBounds(year, month);
+      targetStartPKT = bounds.startPKT;
+      targetEndPKT = bounds.endPKT;
+    } else if (startDateStr || endDateStr) {
+      const bounds = getPKTDateBounds(startDateStr, endDateStr);
+      targetStartPKT = bounds.startPKT;
+      targetEndPKT = bounds.endPKT;
+    }
+
     const dateFilter: any = {};
-    if (startPKT || endPKT) {
+    if (targetStartPKT || targetEndPKT) {
       dateFilter.createdAt = {};
-      if (startPKT) dateFilter.createdAt.gte = startPKT;
-      if (endPKT) dateFilter.createdAt.lte = endPKT;
+      if (targetStartPKT) dateFilter.createdAt.gte = targetStartPKT;
+      if (targetEndPKT) dateFilter.createdAt.lte = targetEndPKT;
     }
 
     const baseWhere = {
@@ -290,15 +327,9 @@ export const OrderService = {
       ...dateFilter
     };
 
-    // COD Aggregations
-    const codCount = await prisma.order.count({
-      where: { ...baseWhere, orderType: 'COD' }
-    });
-
-    const codSalesAgg = await prisma.order.aggregate({
-      where: { ...baseWhere, orderType: 'COD' },
-      _sum: { totalAmount: true }
-    });
+    // 1. Month / Filtered Range Aggregations
+    const codCount = await prisma.order.count({ where: { ...baseWhere, orderType: 'COD' } });
+    const codSalesAgg = await prisma.order.aggregate({ where: { ...baseWhere, orderType: 'COD' }, _sum: { totalAmount: true } });
 
     const pendingCodOrders = await prisma.order.findMany({
       where: { ...baseWhere, orderType: 'COD', codStatus: { in: ['PENDING', 'pending', 'Pending'] } },
@@ -312,24 +343,47 @@ export const OrderService = {
     });
     const codReceivedAmount = receivedCodOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
 
-    // Non-COD Aggregations
-    const nonCodCount = await prisma.order.count({
-      where: { ...baseWhere, orderType: 'NON-COD' }
-    });
-
-    const nonCodSalesAgg = await prisma.order.aggregate({
-      where: { ...baseWhere, orderType: 'NON-COD' },
-      _sum: { totalAmount: true }
-    });
-
-    const advanceAgg = await prisma.order.aggregate({
-      where: baseWhere,
-      _sum: { advancePayment: true }
-    });
+    const nonCodCount = await prisma.order.count({ where: { ...baseWhere, orderType: 'NON-COD' } });
+    const nonCodSalesAgg = await prisma.order.aggregate({ where: { ...baseWhere, orderType: 'NON-COD' }, _sum: { totalAmount: true } });
+    const advanceAgg = await prisma.order.aggregate({ where: baseWhere, _sum: { advancePayment: true } });
 
     const codSales = codSalesAgg._sum.totalAmount || 0;
     const nonCodSales = nonCodSalesAgg._sum.totalAmount || 0;
     const totalAdvance = advanceAgg._sum.advancePayment || 0;
+
+    // 2. Yearly Grand Total Aggregations (Year-To-Date)
+    const activeYear = year || new Date().getFullYear();
+    const { startPKT: yearStartPKT, endPKT: yearEndPKT } = getPKTYearBounds(activeYear);
+    const yearWhere = {
+      status: { notIn: ['void', 'VOID'] },
+      createdAt: { gte: yearStartPKT, lte: yearEndPKT }
+    };
+
+    const yearCodCount = await prisma.order.count({ where: { ...yearWhere, orderType: 'COD' } });
+    const yearNonCodCount = await prisma.order.count({ where: { ...yearWhere, orderType: 'NON-COD' } });
+    const yearSalesAgg = await prisma.order.aggregate({ where: yearWhere, _sum: { totalAmount: true } });
+    const yearTotalSales = yearSalesAgg._sum.totalAmount || 0;
+
+    // 3. Uncleared Legacy Pending COD (Pending COD before current target month or overall)
+    const legacyPendingWhere: any = {
+      status: { notIn: ['void', 'VOID'] },
+      orderType: 'COD',
+      codStatus: { in: ['PENDING', 'pending', 'Pending'] }
+    };
+    if (targetStartPKT) {
+      legacyPendingWhere.createdAt = { lt: targetStartPKT };
+    }
+    const legacyPendingOrders = await prisma.order.findMany({
+      where: legacyPendingWhere,
+      select: { totalAmount: true, advancePayment: true }
+    });
+    const legacyPendingAmount = legacyPendingOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
+
+    // 4. All-time Overall Metrics (for reference)
+    const allTimeWhere = { status: { notIn: ['void', 'VOID'] } };
+    const allTimeCount = await prisma.order.count({ where: allTimeWhere });
+    const allTimeSalesAgg = await prisma.order.aggregate({ where: allTimeWhere, _sum: { totalAmount: true } });
+    const allTimeSales = allTimeSalesAgg._sum.totalAmount || 0;
 
     return {
       cod: {
@@ -346,6 +400,19 @@ export const OrderService = {
         totalCount: codCount + nonCodCount,
         totalSales: codSales + nonCodSales,
         totalAdvance,
+      },
+      yearly: {
+        year: activeYear,
+        totalCount: yearCodCount + yearNonCodCount,
+        totalSales: yearTotalSales,
+      },
+      legacyPendingCod: {
+        count: legacyPendingOrders.length,
+        amount: legacyPendingAmount,
+      },
+      allTime: {
+        totalCount: allTimeCount,
+        totalSales: allTimeSales,
       }
     };
   },

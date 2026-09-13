@@ -4,16 +4,27 @@
 
 export function normalizePhone(phone: string | null | undefined): string {
   if (!phone) return '';
-  // Strip all non-digit characters
+  // Strip all non-digit characters (spaces, +, -, (), dots, zero-width chars)
   let cleaned = phone.replace(/\D/g, '');
   
-  // Format Pakistani numbers (e.g., +923001234567 or 923001234567 -> 03001234567)
-  if (cleaned.startsWith('92') && cleaned.length === 12) {
+  // Format Pakistani numbers to standard 11-digit local format 03XXXXXXXXX
+  if (cleaned.startsWith('00920') && cleaned.length === 15) {
+    cleaned = '0' + cleaned.substring(5);
+  } else if (cleaned.startsWith('0092') && cleaned.length === 14) {
+    cleaned = '0' + cleaned.substring(4);
+  } else if (cleaned.startsWith('920') && cleaned.length === 13) {
+    cleaned = '0' + cleaned.substring(3);
+  } else if (cleaned.startsWith('92') && cleaned.length === 12) {
     cleaned = '0' + cleaned.substring(2);
   } else if (cleaned.length === 10 && !cleaned.startsWith('0')) {
     cleaned = '0' + cleaned;
   }
   
+  // If cleaned starts with '0' and is longer than 11 digits, limit to 11
+  if (cleaned.startsWith('0') && cleaned.length > 11) {
+    cleaned = cleaned.substring(0, 11);
+  }
+
   return cleaned;
 }
 

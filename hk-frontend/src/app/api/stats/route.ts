@@ -14,8 +14,13 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const startDateStr = searchParams.get('startDate') || undefined;
     const endDateStr = searchParams.get('endDate') || undefined;
+    const monthParam = searchParams.get('month');
+    const yearParam = searchParams.get('year');
 
-    const stats = await OrderService.getSystemStats({ startDateStr, endDateStr });
+    const month = monthParam ? parseInt(monthParam, 10) : undefined;
+    const year = yearParam ? parseInt(yearParam, 10) : undefined;
+
+    const stats = await OrderService.getSystemStats({ startDateStr, endDateStr, month, year });
 
     return NextResponse.json(stats);
   } catch (error: any) {
