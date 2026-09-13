@@ -34,6 +34,8 @@ interface Order {
   id: string; customer: string; whatsapp: string; city: string;
   address: string; amount: number; handledBy: "Sami" | "Abid";
   status: OrderStatus; codStatus: CODStatus; date: string;
+  time?: string;
+  createdAt?: string | Date;
   courier?: string; trackingNo?: string; trackingNo2?: string; products: Product[];
   notes?: string; type: "COD" | "NON-COD";
   province?: string;
@@ -93,6 +95,241 @@ async function safeResponseJson(res: Response) {
     return null;
   }
 }
+
+const printParcelLabels = (labelsData: Array<{
+  orderNo: string;
+  date: string;
+  time?: string;
+  handledBy: string;
+  customer: string;
+  whatsapp: string;
+  city: string;
+  province?: string;
+  address: string;
+  orderType: string;
+  amount: number;
+  advancePayment?: number;
+  deliveryCharges?: number;
+  products?: Array<{ name: string; qty: number; price: number }>;
+  notes?: string;
+}>) => {
+  if (typeof window === 'undefined') return;
+  const printWindow = window.open('', '_blank', 'width=800,height=900');
+  if (!printWindow) {
+    alert("Please allow popup windows in your browser to print shipping labels.");
+    return;
+  }
+
+  const content = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Parcel Labels Print - HK Fabrics</title>
+        <style>
+          @page {
+            size: 4in 6in;
+            margin: 4mm;
+          }
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .label-page {
+              page-break-after: always;
+              break-after: page;
+            }
+            .label-page:last-child {
+              page-break-after: auto;
+              break-after: auto;
+            }
+          }
+          body {
+            font-family: 'Courier New', Courier, monospace, sans-serif;
+            margin: 0;
+            padding: 8px;
+            color: #000;
+            background: #fff;
+            font-size: 12px;
+          }
+          .label-box {
+            border: 2px dashed #000;
+            padding: 12px;
+            max-width: 380px;
+            margin: 0 auto;
+            box-sizing: border-box;
+            background: #fff;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+          }
+          .title {
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: 1px;
+          }
+          .subtitle {
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 2px;
+          }
+          .branches {
+            font-size: 9px;
+            color: #222;
+            margin-top: 4px;
+            line-height: 1.3;
+          }
+          .row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 12px;
+          }
+          .label-title {
+            font-weight: bold;
+            color: #333;
+          }
+          .val {
+            font-weight: 600;
+          }
+          .address-box {
+            border: 1.5px solid #000;
+            padding: 6px 8px;
+            margin: 8px 0;
+            background: #f9f9f9;
+          }
+          .cod-box {
+            border: 2px solid #000;
+            padding: 8px;
+            text-align: center;
+            margin-top: 10px;
+            background: #f0f0f0;
+          }
+          .cod-title {
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+          }
+          .cod-amount {
+            font-size: 22px;
+            font-weight: 900;
+            margin-top: 2px;
+          }
+          .items-list {
+            margin-top: 6px;
+            font-size: 11px;
+            border-top: 1px solid #ccc;
+            padding-top: 4px;
+          }
+        </style>
+      </head>
+      <body>
+        ${labelsData.map(l => {
+          const codToCollect = Math.max(0, l.amount - (l.advancePayment || 0));
+          const formattedTime = l.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+          return `
+            <div class="label-page">
+              <div class="label-box">
+                <div class="header">
+                  <div class="title">HK FABRICS</div>
+                  <div class="subtitle">Imported Blankets & Fancy Bed Sheets</div>
+                  <div class="branches">
+                    Shop 55, Muhammadi Shopping Center, Block G, Haidery Market, Karachi<br/>
+                    Ph: 0313-2224398 (Abid) | 0333-3045232 (Sami)
+                  </div>
+                </div>
+                <div class="row"><span class="label-title">Order No:</span><span class="val" style="font-size:14px; font-weight:bold;">${l.orderNo}</span></div>
+                <div class="row"><span class="label-title">Date:</span><span class="val">${l.date}</span></div>
+                <div class="row"><span class="label-title">Time:</span><span class="val">${formattedTime}</span></div>
+                <div class="row"><span class="label-title">Handled By:</span><span class="val">${l.handledBy}</span></div>
+                <div class="row"><span class="label-title">Customer:</span><span class="val">${l.customer}</span></div>
+                <div class="row"><span class="label-title">WhatsApp:</span><span class="val">${l.whatsapp}</span></div>
+                ${l.province ? `<div class="row"><span class="label-title">Province:</span><span class="val">${l.province}</span></div>` : ''}
+                <div class="row"><span class="label-title">City:</span><span class="val" style="font-weight:bold;">${l.city}</span></div>
+                <div class="address-box">
+                  <div class="label-title" style="margin-bottom:2px;">Delivery Address:</div>
+                  <div class="val" style="font-size:12px; line-height:1.3;">${l.address}</div>
+                </div>
+                ${l.products && l.products.length > 0 ? `
+                  <div class="items-list">
+                    <strong>Items:</strong> ${l.products.map(p => `${p.name} (x${p.qty})`).join(', ')}
+                  </div>
+                ` : ''}
+                ${l.deliveryCharges && l.deliveryCharges > 0 ? `
+                  <div class="row" style="margin-top:4px;"><span class="label-title">Delivery Charges:</span><span class="val">Rs ${l.deliveryCharges.toLocaleString()}</span></div>
+                ` : ''}
+                ${l.advancePayment && l.advancePayment > 0 ? `
+                  <div class="row"><span class="label-title">Advance Paid:</span><span class="val">Rs ${l.advancePayment.toLocaleString()}</span></div>
+                ` : ''}
+                <div class="cod-box">
+                  <div class="cod-title">${l.orderType === 'COD' ? 'CASH TO COLLECT (COD)' : 'PARCEL TYPE'}</div>
+                  <div class="cod-amount">${l.orderType === 'COD' ? `Rs ${codToCollect.toLocaleString()}` : 'PREPAID / NON-COD'}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+        <script>
+          window.onload = function() {
+            window.print();
+            setTimeout(function() { window.close(); }, 500);
+          };
+        </script>
+      </body>
+    </html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(content);
+  printWindow.document.close();
+};
+
+const shareParcelDetails = (data: {
+  orderNo: string;
+  customer: string;
+  phone: string;
+  address: string;
+  city: string;
+  province?: string;
+  codAmount: number;
+  orderType?: string;
+  items?: Array<{ name: string; qty: number; price: number }>;
+}) => {
+  let msg = `*📦 HK FABRICS - PARCEL SLIP*\n`;
+  msg += `------------------------------------\n`;
+  msg += `*Order No:* ${data.orderNo}\n`;
+  msg += `*Customer:* ${data.customer}\n`;
+  msg += `*Phone:* ${data.phone}\n`;
+  msg += `*City:* ${data.city}${data.province ? ` (${data.province})` : ''}\n`;
+  msg += `*Address:* ${data.address}\n`;
+  if (data.items && data.items.length > 0) {
+    msg += `*Items:* ${data.items.map(i => `${i.name} (x${i.qty})`).join(', ')}\n`;
+  }
+  msg += `------------------------------------\n`;
+  msg += `*${data.orderType === 'NON-COD' ? 'PAYMENT STATUS' : 'CASH TO COLLECT (COD)'}:* ${data.orderType === 'NON-COD' ? 'PREPAID / NON-COD' : `Rs ${data.codAmount.toLocaleString('en-PK')}`}\n`;
+  msg += `------------------------------------\n`;
+  msg += `Shop 55, Muhammadi Shopping Center, Haidery, Karachi\n`;
+  msg += `Contact: 0313-2224398 / 0333-3045232`;
+
+  const encodedText = encodeURIComponent(msg);
+
+  // Using api.whatsapp.com/send?text=... allows picking ANY contact or group without forcing direct send to customer number
+  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
+
+  if (typeof navigator !== 'undefined' && navigator.share && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    navigator.share({
+      title: `Parcel Slip #${data.orderNo}`,
+      text: msg,
+    }).catch(() => {
+      window.open(whatsappUrl, '_blank');
+    });
+  } else {
+    window.open(whatsappUrl, '_blank');
+  }
+};
 
 // ─── Shared Components ─────────────────────────────────────────────────────────
 
@@ -3150,7 +3387,7 @@ function CreateOrderScreen({
           <div className="space-y-1.5">
             <div className="flex justify-between"><span className="text-slate-400">Order No:</span><span className="font-bold">{orderIdToSave}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Date:</span><span>{new Date().toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" })}</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">Time:</span><span>11:45 AM</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Time:</span><span>{new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Handled By:</span><span>{handledBy}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Customer:</span><span>{customerName || "—"}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">WhatsApp:</span><span>{whatsapp || "—"}</span></div>
@@ -3176,12 +3413,40 @@ function CreateOrderScreen({
           </div>
         </div>
         <div className="flex gap-3 mt-4">
-          <Btn className="flex-1" onClick={() => { handleSave(); setShowPrint(false); }}>
+          <Btn className="flex-1" onClick={() => {
+            handleSave();
+            setShowPrint(false);
+            printParcelLabels([{
+              orderNo: orderIdToSave,
+              date: new Date().toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }),
+              time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
+              handledBy,
+              customer: customerName,
+              whatsapp,
+              city,
+              province,
+              address,
+              orderType,
+              amount: grandTotal,
+              advancePayment,
+              deliveryCharges,
+              products
+            }]);
+          }}>
             <Printer size={14} /> Print Label
           </Btn>
           <Btn variant="secondary" className="flex-1" onClick={() => {
-              const text = encodeURIComponent(`*Order Details*\nOrder No: ${orderIdToSave}\nCustomer: ${customerName}\nAddress: ${address}, ${city}\nCOD Amount: Rs ${Math.max(0, grandTotal - advancePayment)}`);
-              window.open(`https://wa.me/${whatsapp.replace(/^0/, '92')}?text=${text}`, '_blank');
+              shareParcelDetails({
+                orderNo: orderIdToSave,
+                customer: customerName || "—",
+                phone: whatsapp || "—",
+                address: address || "—",
+                city: city || "—",
+                province,
+                codAmount: Math.max(0, grandTotal - advancePayment),
+                orderType,
+                items: products
+              });
           }}>
             Share on WhatsApp
           </Btn>
@@ -3643,7 +3908,7 @@ function OrdersScreen({
                 <div className="space-y-1.5">
                   <div className="flex justify-between"><span className="text-slate-400">Order No:</span><span className="font-bold">{o.id}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Date:</span><span>{o.date}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-400">Time:</span><span>11:45 AM</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Time:</span><span>{o.time || (o.createdAt ? new Date(o.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }))}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Handled By:</span><span>{o.handledBy}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Customer:</span><span>{o.customer}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">WhatsApp:</span><span>{o.whatsapp}</span></div>
@@ -3664,12 +3929,39 @@ function OrdersScreen({
 
               </div>
               <div className="flex gap-3 mt-4">
-                <Btn className="flex-1" onClick={() => setPrintOrderId(null)}>
+                <Btn className="flex-1" onClick={() => {
+                  printParcelLabels([{
+                    orderNo: o.id,
+                    date: o.date,
+                    time: o.time || (o.createdAt ? new Date(o.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })),
+                    handledBy: o.handledBy,
+                    customer: o.customer,
+                    whatsapp: o.whatsapp,
+                    city: o.city,
+                    province: o.province,
+                    address: o.address,
+                    orderType: o.type,
+                    amount: o.amount,
+                    advancePayment: o.advancePayment,
+                    deliveryCharges: o.deliveryCharges,
+                    products: o.products
+                  }]);
+                  setPrintOrderId(null);
+                }}>
                   <Printer size={14} /> Print Label
                 </Btn>
                 <Btn variant="secondary" className="flex-1" onClick={() => {
-                  const text = encodeURIComponent(`*Order Details*\nOrder No: ${o.id}\nCustomer: ${o.customer}\nAddress: ${o.address}, ${o.city}\nCOD Amount: Rs ${Math.max(0, o.amount - (o.advancePayment || 0))}`);
-                  window.open(`https://wa.me/${o.whatsapp.replace(/^0/, '92')}?text=${text}`, '_blank');
+                  shareParcelDetails({
+                    orderNo: o.id,
+                    customer: o.customer,
+                    phone: o.whatsapp,
+                    address: o.address,
+                    city: o.city,
+                    province: o.province,
+                    codAmount: Math.max(0, o.amount - (o.advancePayment || 0)),
+                    orderType: o.type,
+                    items: o.products
+                  });
                 }}>
                   Share on WhatsApp
                 </Btn>
@@ -3700,7 +3992,7 @@ function OrdersScreen({
                 <div className="space-y-1.5">
                   <div className="flex justify-between"><span className="text-slate-400">Order No:</span><span className="font-bold">{o.id}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Date:</span><span>{o.date}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-400">Time:</span><span>11:45 AM</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Time:</span><span>{o.time || (o.createdAt ? new Date(o.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }))}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Handled By:</span><span>{o.handledBy}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Customer:</span><span>{o.customer}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">WhatsApp:</span><span>{o.whatsapp}</span></div>
@@ -3725,6 +4017,23 @@ function OrdersScreen({
         </div>
         <div className="flex gap-3 mt-4">
           <Btn className="flex-1" onClick={() => {
+            const selectedOrders = Array.from(selectedIds).map(id => orders.find(item => item.id === id)).filter(Boolean) as Order[];
+            printParcelLabels(selectedOrders.map(o => ({
+              orderNo: o.id,
+              date: o.date,
+              time: o.time || (o.createdAt ? new Date(o.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })),
+              handledBy: o.handledBy,
+              customer: o.customer,
+              whatsapp: o.whatsapp,
+              city: o.city,
+              province: o.province,
+              address: o.address,
+              orderType: o.type,
+              amount: o.amount,
+              advancePayment: o.advancePayment,
+              deliveryCharges: o.deliveryCharges,
+              products: o.products
+            })));
             setBulkPrintOpen(false);
             setSelectedIds(new Set());
           }}>
@@ -3781,7 +4090,7 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
           <div className="space-y-1.5">
             <div className="flex justify-between"><span className="text-slate-400">Order No:</span><span className="font-bold">{o.id}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Date:</span><span>{o.date}</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">Time:</span><span>11:45 AM</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Time:</span><span>{o.time || (o.createdAt ? new Date(o.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }))}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Handled By:</span><span>{o.handledBy}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Customer:</span><span>{o.customer}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">WhatsApp:</span><span>{o.whatsapp}</span></div>
@@ -3808,12 +4117,39 @@ function OrderDetailScreen({ orderId, setScreen, orders }: { orderId: string | n
 
         </div>
         <div className="flex gap-3 mt-4">
-          <Btn className="flex-1" onClick={() => setShowPrint(false)}>
+          <Btn className="flex-1" onClick={() => {
+            printParcelLabels([{
+              orderNo: o.id,
+              date: o.date,
+              time: o.time || (o.createdAt ? new Date(o.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })),
+              handledBy: o.handledBy,
+              customer: o.customer,
+              whatsapp: o.whatsapp,
+              city: o.city,
+              province: o.province,
+              address: o.address,
+              orderType: o.type,
+              amount: o.amount,
+              advancePayment: o.advancePayment,
+              deliveryCharges: o.deliveryCharges,
+              products: o.products
+            }]);
+            setShowPrint(false);
+          }}>
             <Printer size={14} /> Print Label
           </Btn>
           <Btn variant="secondary" className="flex-1" onClick={() => {
-              const text = encodeURIComponent(`*Order Details*\nOrder No: ${o.id}\nCustomer: ${o.customer}\nAddress: ${o.address}, ${o.city}\nCOD Amount: Rs ${Math.max(0, o.amount - (o.advancePayment || 0))}`);
-              window.open(`https://wa.me/${o.whatsapp.replace(/^0/, '92')}?text=${text}`, '_blank');
+              shareParcelDetails({
+                orderNo: o.id,
+                customer: o.customer,
+                phone: o.whatsapp,
+                address: o.address,
+                city: o.city,
+                province: o.province,
+                codAmount: Math.max(0, o.amount - (o.advancePayment || 0)),
+                orderType: o.type,
+                items: o.products
+              });
           }}>
             Share on WhatsApp
           </Btn>
