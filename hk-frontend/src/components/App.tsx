@@ -1875,15 +1875,15 @@ function DashboardScreen({ setScreen, onViewOrder, orders, onRevertActivity }: {
           ) : (
             <div className="space-y-2.5 font-sans overflow-y-auto max-h-[260px] pr-1 scrollbar-hide">
               {activityLogs.slice(0, 5).map((log: any, idx: number) => (
-                <div key={log.id || idx} className="flex items-start justify-between gap-2 text-xs p-1.5 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
+                <div key={log.id || idx} className="flex items-center justify-between gap-2 text-xs p-2 rounded-xl hover:bg-slate-50 transition-colors border border-slate-100/60">
                   <div className="flex items-start gap-2 min-w-0 flex-1">
                     <div className="p-1.5 rounded-full bg-slate-100 text-slate-600 mt-0.5 flex-shrink-0">
                       <User size={12} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-800 truncate">{log.action || "Activity"}</span>
-                        <span className="text-[9px] text-slate-500 font-mono font-medium ml-2 flex-shrink-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-bold text-slate-800 truncate text-xs">{log.action || "Activity"}</span>
+                        <span className="text-[9px] text-slate-500 font-mono font-medium flex-shrink-0">
                           {formatActivityTime(log.createdAt, log.time, log.date)}
                         </span>
                       </div>
@@ -1898,13 +1898,13 @@ function DashboardScreen({ setScreen, onViewOrder, orders, onRevertActivity }: {
                         }
                       }}
                       title="1-Click Revert / Undo Action"
-                      className="p-1 px-1.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200/80 transition-all flex items-center gap-1 flex-shrink-0 mt-0.5 active:scale-95 shadow-xs"
+                      className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-900 text-[11px] font-bold border border-amber-300/80 transition-all flex items-center gap-1 flex-shrink-0 active:scale-95 shadow-2xs cursor-pointer"
                     >
-                      <RotateCcw size={10} /> Undo
+                      <RotateCcw size={11} className="text-amber-700" /> Undo
                     </button>
                   )}
                   {log.isReverted && (
-                    <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
+                    <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md flex-shrink-0">
                       Reverted
                     </span>
                   )}
@@ -5175,83 +5175,264 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
 // ─── Activity Log Screen ──────────────────────────────────────────────────────
 
 function ActivityLogScreen({ activityLogs, onRevertActivity }: { activityLogs: any[]; onRevertActivity?: (id: string) => void }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [actionFilter, setActionFilter] = useState("all");
+
   const actionColor: Record<string, string> = {
-    "Create Order": "bg-blue-50 text-blue-700",
-    "Update Order": "bg-orange-50 text-orange-700",
-    "COD Received": "bg-green-50 text-green-700",
-    "Void Order": "bg-red-50 text-red-600",
-    "Print Label": "bg-purple-50 text-purple-700",
-    "Tracking Added": "bg-indigo-50 text-indigo-700",
-    "Action Reverted": "bg-amber-50 text-amber-800",
+    "Create Order": "bg-blue-50 text-blue-700 border-blue-200/60",
+    "Update Order": "bg-orange-50 text-orange-700 border-orange-200/60",
+    "COD Received": "bg-emerald-50 text-emerald-700 border-emerald-200/60",
+    "Void Order": "bg-red-50 text-red-700 border-red-200/60",
+    "Print Label": "bg-purple-50 text-purple-700 border-purple-200/60",
+    "Tracking Added": "bg-indigo-50 text-indigo-700 border-indigo-200/60",
+    "Action Reverted": "bg-amber-50 text-amber-800 border-amber-200/60",
+    "Login Success": "bg-teal-50 text-teal-700 border-teal-200/60",
+    "Login Failure": "bg-rose-50 text-rose-700 border-rose-200/60",
   };
 
+  const filteredLogs = useMemo(() => {
+    return activityLogs.filter((log: any) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q || (
+        (log.action && log.action.toLowerCase().includes(q)) ||
+        (log.order && log.order.toLowerCase().includes(q)) ||
+        (log.performedBy && log.performedBy.toLowerCase().includes(q)) ||
+        (log.details && log.details.toLowerCase().includes(q)) ||
+        (log.date && log.date.includes(q))
+      );
+      const matchesAction = actionFilter === "all" || log.action === actionFilter;
+      return matchesSearch && matchesAction;
+    });
+  }, [activityLogs, searchQuery, actionFilter]);
+
+  const uniqueActions = useMemo(() => {
+    const set = new Set<string>();
+    activityLogs.forEach((l: any) => l.action && set.add(l.action));
+    return Array.from(set);
+  }, [activityLogs]);
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-[#0F172A]">Activity Log & Audit Trail</h1>
-        <span className="text-xs font-mono text-slate-500 font-medium bg-slate-100 px-3 py-1 rounded-full">
-          Total Logs: {activityLogs.length}
-        </span>
-      </div>
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-        <div className="overflow-x-auto flex-1">
-          <table className="w-full text-sm min-w-[650px]">
-            <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200/60">
-              <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                <th className="text-left px-6 py-3">Date</th>
-                <th className="text-left px-6 py-3">Time</th>
-                <th className="text-left px-6 py-3">Action</th>
-                <th className="text-left px-6 py-3">Order / Details</th>
-                <th className="text-left px-6 py-3">Performed By</th>
-                <th className="text-right px-6 py-3">Revert Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {activityLogs.map((log: any) => (
-                <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 text-xs font-medium text-slate-500">{log.date}</td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{log.time}</td>
-                  <td className="px-6 py-4">
-                    <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide ring-1 ring-inset",
-                      actionColor[log.action] ? `${actionColor[log.action]} ring-slate-600/20` : "bg-slate-50 text-slate-700 ring-slate-600/20"
-                    )}>
-                      {log.action}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-xs">
-                    <span className="font-mono font-bold text-[#0F172A] block">{log.order}</span>
-                    {log.details && <span className="text-[11px] text-slate-500 block mt-0.5">{log.details}</span>}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide",
-                      (log.performedBy || log.by) === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
-                    )}>{log.performedBy || log.by}</span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    {log.order && log.order !== "-" && !log.isReverted && log.action !== "Action Reverted" && onRevertActivity ? (
-                      <button
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to REVERT "${log.action}" for ${log.order}?`)) {
-                            onRevertActivity(log.id);
-                          }
-                        }}
-                        className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 rounded-lg text-xs font-bold transition-all shadow-xs inline-flex items-center gap-1 active:scale-95"
-                      >
-                        <RotateCcw size={12} /> Undo
-                      </button>
-                    ) : log.isReverted ? (
-                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                        Reverted
-                      </span>
-                    ) : (
-                      <span className="text-slate-300 text-xs">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="space-y-4 sm:space-y-5 pb-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
+        <div>
+          <h1 className="text-lg sm:text-2xl font-extrabold text-[#0F172A] tracking-tight flex items-center gap-2">
+            <ClipboardList className="text-[#D4AF37] flex-shrink-0" size={24} />
+            <span>Activity Log & Audit Trail</span>
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Audit history of parcel actions, staff operations, and 1-click undo controls.
+          </p>
         </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className="text-xs font-mono text-slate-700 font-bold bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/80 shadow-2xs whitespace-nowrap">
+            Showing {filteredLogs.length} of {activityLogs.length} logs
+          </span>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar (Mobile First) */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search action, order #, staff, details..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F172A] focus:bg-white transition-all"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <div className="w-full sm:w-56">
+          <FieldSelect
+            value={actionFilter}
+            onChange={e => setActionFilter(e.target.value)}
+            className="text-xs py-2 rounded-xl bg-slate-50 border-slate-200"
+          >
+            <option value="all">All Actions ({activityLogs.length})</option>
+            {uniqueActions.map(act => (
+              <option key={act} value={act}>{act}</option>
+            ))}
+          </FieldSelect>
+        </div>
+      </div>
+
+      {/* ─── Mobile View (Cards) - Shown on mobile & small screens ─── */}
+      <div className="block md:hidden space-y-3">
+        {filteredLogs.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 space-y-2 shadow-xs">
+            <Activity size={32} className="mx-auto text-slate-300" />
+            <div className="font-bold text-slate-600 text-sm">No activity logs match your search</div>
+            <p className="text-xs text-slate-400">Try changing your search term or action filter.</p>
+          </div>
+        ) : (
+          filteredLogs.map((log: any) => (
+            <div key={log.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3 hover:border-slate-300 transition-all">
+              {/* Top Row: Action Badge + Timestamp */}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className={cn(
+                  "px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wide border shadow-2xs",
+                  actionColor[log.action] || "bg-slate-50 text-slate-700 border-slate-200"
+                )}>
+                  {log.action}
+                </span>
+
+                <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-500 font-semibold bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                  <Clock size={12} className="text-slate-400" />
+                  <span>{log.date}</span>
+                  <span>•</span>
+                  <span>{log.time}</span>
+                </div>
+              </div>
+
+              {/* Order & Details */}
+              <div className="space-y-1.5">
+                {log.order && log.order !== "-" && (
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-extrabold text-[#0F172A] text-sm flex items-center gap-1.5">
+                      <Box size={14} className="text-indigo-600" />
+                      {log.order}
+                    </span>
+                  </div>
+                )}
+                {log.details && (
+                  <p className="text-xs text-slate-600 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100/80 leading-relaxed font-sans">
+                    {log.details}
+                  </p>
+                )}
+              </div>
+
+              {/* Bottom Row: Staff Agent & Mobile-First Action Button */}
+              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5">
+                  <User size={13} className="text-slate-400" />
+                  <span className={cn(
+                    "px-2.5 py-0.5 rounded-md text-[11px] font-bold border",
+                    (log.performedBy || log.by) === "Sami"
+                      ? "bg-indigo-50 text-indigo-700 border-indigo-200/60"
+                      : "bg-purple-50 text-purple-700 border-purple-200/60"
+                  )}>
+                    {log.performedBy || log.by || "System"}
+                  </span>
+                </div>
+
+                <div>
+                  {log.order && log.order !== "-" && !log.isReverted && log.action !== "Action Reverted" && onRevertActivity ? (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to REVERT "${log.action}" for ${log.order}?`)) {
+                          onRevertActivity(log.id);
+                        }
+                      }}
+                      className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-900 border border-amber-300/80 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                    >
+                      <RotateCcw size={13} className="text-amber-700" /> Undo Action
+                    </button>
+                  ) : log.isReverted ? (
+                    <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-xl border border-slate-200/60 inline-block">
+                      Reverted
+                    </span>
+                  ) : (
+                    <span className="text-slate-300 text-xs">—</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ─── Desktop View (Table) - Shown on md screens and above ─── */}
+      <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        {filteredLogs.length === 0 ? (
+          <div className="p-12 text-center text-slate-400 space-y-2">
+            <Activity size={36} className="mx-auto text-slate-300" />
+            <div className="font-bold text-slate-600 text-sm">No activity logs match your search filter</div>
+            <p className="text-xs text-slate-400">Clear filters to view all audit logs.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs min-w-[700px]">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-mono text-[10px]">
+                <tr>
+                  <th className="py-3.5 px-4 whitespace-nowrap min-w-[95px]">Date</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap min-w-[85px]">Time</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap min-w-[130px]">Action</th>
+                  <th className="py-3.5 px-4 min-w-[220px]">Order / Details</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap min-w-[120px]">Performed By</th>
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap min-w-[120px]">Revert Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-sans">
+                {filteredLogs.map((log: any) => (
+                  <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3.5 px-4 font-mono font-medium text-slate-600 whitespace-nowrap">
+                      {log.date}
+                    </td>
+                    <td className="py-3.5 px-4 font-mono text-slate-500 whitespace-nowrap">
+                      {log.time}
+                    </td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <span className={cn(
+                        "px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-2xs whitespace-nowrap inline-block",
+                        actionColor[log.action] || "bg-slate-50 text-slate-700 border-slate-200"
+                      )}>
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 min-w-[220px]">
+                      {log.order && log.order !== "-" && (
+                        <span className="font-mono font-bold text-[#0F172A] block text-xs">{log.order}</span>
+                      )}
+                      {log.details && (
+                        <span className="text-[11px] text-slate-500 block mt-0.5 leading-snug">{log.details}</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <span className={cn(
+                        "px-2.5 py-1 rounded-md text-[11px] font-bold border inline-block",
+                        (log.performedBy || log.by) === "Sami"
+                          ? "bg-indigo-50 text-indigo-700 border-indigo-200/60"
+                          : "bg-purple-50 text-purple-700 border-purple-200/60"
+                      )}>
+                        {log.performedBy || log.by || "System"}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                      {log.order && log.order !== "-" && !log.isReverted && log.action !== "Action Reverted" && onRevertActivity ? (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to REVERT "${log.action}" for ${log.order}?`)) {
+                              onRevertActivity(log.id);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300/80 rounded-xl text-xs font-bold transition-all shadow-xs inline-flex items-center gap-1.5 active:scale-95 hover:shadow-sm"
+                        >
+                          <RotateCcw size={12} /> Undo
+                        </button>
+                      ) : log.isReverted ? (
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200/60 inline-block">
+                          Reverted
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-xs">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
