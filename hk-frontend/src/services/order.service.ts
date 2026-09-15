@@ -245,7 +245,7 @@ export const OrderService = {
     const { startPKT, endPKT } = getPKTDateBounds(startStr, endStr);
 
     const where: any = {
-      status: { notIn: ['void', 'VOID'] },
+      status: { notIn: ['void', 'VOID', 'returned', 'RETURNED'] },
       createdAt: {
         gte: startPKT,
         lte: endPKT
@@ -323,7 +323,7 @@ export const OrderService = {
     }
 
     const baseWhere = {
-      status: { notIn: ['void', 'VOID'] },
+      status: { notIn: ['void', 'VOID', 'returned', 'RETURNED'] },
       ...dateFilter
     };
 
@@ -351,11 +351,21 @@ export const OrderService = {
     const nonCodSales = nonCodSalesAgg._sum.totalAmount || 0;
     const totalAdvance = advanceAgg._sum.advancePayment || 0;
 
+    // Returned Orders Metrics (Deducted from sales totals)
+    const returnedCount = await prisma.order.count({
+      where: { status: { in: ['returned', 'RETURNED'] }, ...dateFilter }
+    });
+    const returnedSalesAgg = await prisma.order.aggregate({
+      where: { status: { in: ['returned', 'RETURNED'] }, ...dateFilter },
+      _sum: { totalAmount: true }
+    });
+    const returnedSales = returnedSalesAgg._sum.totalAmount || 0;
+
     // 2. Yearly Grand Total Aggregations (Year-To-Date)
     const activeYear = year || new Date().getFullYear();
     const { startPKT: yearStartPKT, endPKT: yearEndPKT } = getPKTYearBounds(activeYear);
     const yearWhere = {
-      status: { notIn: ['void', 'VOID'] },
+      status: { notIn: ['void', 'VOID', 'returned', 'RETURNED'] },
       createdAt: { gte: yearStartPKT, lte: yearEndPKT }
     };
 
@@ -366,7 +376,7 @@ export const OrderService = {
 
     // 3. Uncleared Legacy Pending COD (Pending COD before current target month or overall)
     const legacyPendingWhere: any = {
-      status: { notIn: ['void', 'VOID'] },
+      status: { notIn: ['void', 'VOID', 'returned', 'RETURNED'] },
       orderType: 'COD',
       codStatus: { in: ['PENDING', 'pending', 'Pending'] }
     };
@@ -380,7 +390,7 @@ export const OrderService = {
     const legacyPendingAmount = legacyPendingOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
 
     // 4. All-time Overall Metrics (for reference)
-    const allTimeWhere = { status: { notIn: ['void', 'VOID'] } };
+    const allTimeWhere = { status: { notIn: ['void', 'VOID', 'returned', 'RETURNED'] } };
     const allTimeCount = await prisma.order.count({ where: allTimeWhere });
     const allTimeSalesAgg = await prisma.order.aggregate({ where: allTimeWhere, _sum: { totalAmount: true } });
     const allTimeSales = allTimeSalesAgg._sum.totalAmount || 0;
@@ -400,6 +410,10 @@ export const OrderService = {
         totalCount: codCount + nonCodCount,
         totalSales: codSales + nonCodSales,
         totalAdvance,
+      },
+      returned: {
+        count: returnedCount,
+        sales: returnedSales,
       },
       yearly: {
         year: activeYear,
@@ -737,7 +751,11 @@ export const OrderService = {
       throw new Error(`Invalid secondary tracking number format: "${trackingNumber2}".`);
     }
 
-    if (trackingNumber && trackingNumber.trim()) {
+    const previousTrack = existingOrder.trackingEntries?.[0]?.trackingNumber || null;
+    const targetCourier = courierName || existingOrder.trackingEntries?.[0]?.courierName || 'Other';
+    const isLocalRider = targetCourier.toLowerCase().includes('local') || targetCourier.toLowerCase().includes('rider');
+
+    if (trackingNumber && trackingNumber.trim() && !isLocalRider) {
       const normalizedTrack = normalizeTracking(trackingNumber);
       const existingEntry = await prisma.trackingEntry.findFirst({
         where: { 
@@ -761,7 +779,7 @@ export const OrderService = {
       }
     }
 
-    if (trackingNumber2 && trackingNumber2.trim()) {
+    if (trackingNumber2 && trackingNumber2.trim() && !isLocalRider) {
       const normalizedTrack2 = normalizeTracking(trackingNumber2);
       const existingEntry2 = await prisma.trackingEntry.findFirst({
         where: { 
@@ -875,20 +893,31 @@ export const OrderService = {
         include: { customer: true, items: true, trackingEntries: { orderBy: { createdAt: 'desc' } } }
       });
 
-      const previousTrack = existingOrder.trackingEntries?.[0]?.trackingNumber || null;
-      const targetCourier = courierName || existingOrder.trackingEntries?.[0]?.courierName || 'Other';
-
       if (trackingNumber !== undefined) {
         // Clear all previous tracking entries for this order so stale/wrong tracking numbers don't persist
         await tx.trackingEntry.deleteMany({ where: { orderId: targetId } });
 
         if (trackingNumber && trackingNumber.trim()) {
-          const normalizedTrack = normalizeTracking(trackingNumber);
+          const rawTrack = trackingNumber.trim();
+          let trackToSave = normalizeTracking(rawTrack);
+
+          if (isLocalRider) {
+            const existsDB = await tx.trackingEntry.findFirst({
+              where: {
+                trackingNumber: trackToSave,
+                orderId: { not: targetId }
+              }
+            });
+            if (existsDB) {
+              trackToSave = normalizeTracking(`${rawTrack} (${updatedOrder.orderNo})`);
+            }
+          }
+
           await tx.trackingEntry.create({
             data: {
               orderId: targetId,
               courierName: targetCourier,
-              trackingNumber: normalizedTrack
+              trackingNumber: trackToSave
             }
           });
 
@@ -901,12 +930,26 @@ export const OrderService = {
         }
 
         if (trackingNumber2 && trackingNumber2.trim()) {
-          const normalizedTrack2 = normalizeTracking(trackingNumber2);
+          const rawTrack2 = trackingNumber2.trim();
+          let trackToSave2 = normalizeTracking(rawTrack2);
+
+          if (isLocalRider) {
+            const existsDB2 = await tx.trackingEntry.findFirst({
+              where: {
+                trackingNumber: trackToSave2,
+                orderId: { not: targetId }
+              }
+            });
+            if (existsDB2) {
+              trackToSave2 = normalizeTracking(`${rawTrack2} (${updatedOrder.orderNo}-2)`);
+            }
+          }
+
           await tx.trackingEntry.create({
             data: {
               orderId: targetId,
               courierName: targetCourier,
-              trackingNumber: normalizedTrack2
+              trackingNumber: trackToSave2
             }
           });
         }
@@ -1112,7 +1155,7 @@ export const OrderService = {
     const { startPKT, endPKT } = getPKTDateBounds(startDateStr, endDateStr);
 
     const whereOrder: any = {
-      status: { notIn: ['void', 'VOID'] }
+      status: { notIn: ['void', 'VOID', 'returned', 'RETURNED'] }
     };
 
     if (orderType && orderType !== 'all' && orderType !== 'ALL') {

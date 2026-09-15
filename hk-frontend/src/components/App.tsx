@@ -59,6 +59,11 @@ function useDebounce<T>(value: T, delay: number = 300): T {
   return debouncedValue;
 }
 
+export function formatDisplayTracking(trackingNo?: string | null): string {
+  if (!trackingNo) return "—";
+  return trackingNo.replace(/\s*\([A-Z0-9-]+\)$/i, '').trim() || trackingNo;
+}
+
 // ─── Mock Data & Constants ──────────────────────────────────────────────────────
 const PROVINCE_CITIES: Record<string, string[]> = PROVINCE_CITIES_MAP;
 const PROVINCES = Object.keys(PROVINCE_CITIES);
@@ -1317,16 +1322,19 @@ function DashboardScreen({ setScreen, onViewOrder, orders, onRevertActivity }: {
     return () => clearInterval(interval);
   }, []);
 
-  const codCount = stats?.cod?.count ?? orders.filter(o => o.type === "COD" && o.status !== "void").length;
-  const codSales = stats?.cod?.sales ?? orders.filter(o => o.type === "COD" && o.status !== "void").reduce((a, b) => a + b.amount, 0);
-  const pendingCOD = stats?.cod?.pendingAmount ?? orders.filter(o => o.type === "COD" && o.codStatus === "pending" && o.status !== "void").reduce((a, b) => a + b.amount, 0);
-  const receivedCOD = stats?.cod?.receivedAmount ?? orders.filter(o => o.type === "COD" && o.codStatus === "received").reduce((a, b) => a + b.amount, 0);
+  const codCount = stats?.cod?.count ?? orders.filter(o => o.type === "COD" && o.status !== "void" && o.status !== "returned").length;
+  const codSales = stats?.cod?.sales ?? orders.filter(o => o.type === "COD" && o.status !== "void" && o.status !== "returned").reduce((a, b) => a + b.amount, 0);
+  const pendingCOD = stats?.cod?.pendingAmount ?? orders.filter(o => o.type === "COD" && o.codStatus === "pending" && o.status !== "void" && o.status !== "returned").reduce((a, b) => a + Math.max(0, b.amount - (b.advancePayment || 0)), 0);
+  const receivedCOD = stats?.cod?.receivedAmount ?? orders.filter(o => o.type === "COD" && o.codStatus === "received" && o.status !== "void" && o.status !== "returned").reduce((a, b) => a + Math.max(0, b.amount - (b.advancePayment || 0)), 0);
 
-  const nonCodCount = stats?.nonCod?.count ?? orders.filter(o => o.type === "NON-COD" && o.status !== "void").length;
-  const nonCodSales = stats?.nonCod?.sales ?? orders.filter(o => o.type === "NON-COD" && o.status !== "void").reduce((a, b) => a + b.amount, 0);
+  const nonCodCount = stats?.nonCod?.count ?? orders.filter(o => o.type === "NON-COD" && o.status !== "void" && o.status !== "returned").length;
+  const nonCodSales = stats?.nonCod?.sales ?? orders.filter(o => o.type === "NON-COD" && o.status !== "void" && o.status !== "returned").reduce((a, b) => a + b.amount, 0);
 
   const monthlyTotalCount = stats?.overall?.totalCount ?? (codCount + nonCodCount);
   const monthlyTotalSales = stats?.overall?.totalSales ?? (codSales + nonCodSales);
+
+  const returnedCount = stats?.returned?.count ?? orders.filter(o => o.status === "returned").length;
+  const returnedSales = stats?.returned?.sales ?? orders.filter(o => o.status === "returned").reduce((a, b) => a + b.amount, 0);
 
   const yearlyTotalCount = stats?.yearly?.totalCount ?? 0;
   const yearlyTotalSales = stats?.yearly?.totalSales ?? 0;
@@ -1335,8 +1343,8 @@ function DashboardScreen({ setScreen, onViewOrder, orders, onRevertActivity }: {
   const legacyPendingCodAmount = stats?.legacyPendingCod?.amount ?? 0;
   const legacyPendingCodCount = stats?.legacyPendingCod?.count ?? 0;
 
-  const pendingTracking = orders.filter(o => !o.trackingNo && o.status !== "void").length;
-  const pendingCODOrdersCount = orders.filter(o => o.type === "COD" && o.codStatus === "pending" && o.status !== "void").length;
+  const pendingTracking = orders.filter(o => !o.trackingNo && o.status !== "void" && o.status !== "returned").length;
+  const pendingCODOrdersCount = orders.filter(o => o.type === "COD" && o.codStatus === "pending" && o.status !== "void" && o.status !== "returned").length;
 
   const chartData = useMemo(() => {
     const map: Record<string, { date: string; cod: number; nonCod: number; total: number }> = {};
@@ -2216,7 +2224,7 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
                         {o.trackingNo ? (
                           <div className="flex items-center gap-1.5 justify-between">
                             <div>
-                              <div className="font-semibold text-slate-800">{o.trackingNo}</div>
+                              <div className="font-semibold text-slate-800">{formatDisplayTracking(o.trackingNo)}</div>
                               <div className="text-[10px] text-indigo-600 font-bold uppercase">{o.courier}</div>
                             </div>
                             {onEditTracking && !isVoid && (
@@ -2570,7 +2578,7 @@ function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder,
                           {o.trackingNo ? (
                             <div className="flex items-center gap-1.5 justify-between">
                               <div>
-                                <div className="font-semibold text-slate-800">{o.trackingNo}</div>
+                                <div className="font-semibold text-slate-800">{formatDisplayTracking(o.trackingNo)}</div>
                                 <div className="text-[10px] text-indigo-600 font-bold uppercase">{o.courier}</div>
                               </div>
                               {onEditTracking && !isVoid && (
@@ -3773,7 +3781,7 @@ function OrdersScreen({
                         {o.trackingNo ? (
                           <div className="flex items-center gap-1.5 justify-between">
                             <div>
-                              <div className="font-semibold text-slate-800">{o.trackingNo}</div>
+                              <div className="font-semibold text-slate-800">{formatDisplayTracking(o.trackingNo)}</div>
                               <div className="text-[10px] text-indigo-600 font-bold uppercase">{o.courier}</div>
                             </div>
                             {onEditTracking && !isVoid && (
@@ -4987,10 +4995,10 @@ function ReportsScreen({ orders }: { orders: Order[] }) {
     return true;
   });
 
-  const totalRevenue = filteredOrders.filter(o => o.status !== "void").reduce((a, b) => a + b.amount, 0);
-  const codRevenue = filteredOrders.filter(o => o.status !== "void" && o.type === "COD").reduce((a, b) => a + b.amount, 0);
-  const nonCodRevenue = filteredOrders.filter(o => o.status !== "void" && o.type === "NON-COD").reduce((a, b) => a + b.amount, 0);
-  const totalAdvance = filteredOrders.filter(o => o.status !== "void").reduce((a, b) => a + (b.advancePayment || 0), 0);
+  const totalRevenue = filteredOrders.filter(o => o.status !== "void" && o.status !== "returned").reduce((a, b) => a + b.amount, 0);
+  const codRevenue = filteredOrders.filter(o => o.status !== "void" && o.status !== "returned" && o.type === "COD").reduce((a, b) => a + b.amount, 0);
+  const nonCodRevenue = filteredOrders.filter(o => o.status !== "void" && o.status !== "returned" && o.type === "NON-COD").reduce((a, b) => a + b.amount, 0);
+  const totalAdvance = filteredOrders.filter(o => o.status !== "void" && o.status !== "returned").reduce((a, b) => a + (b.advancePayment || 0), 0);
 
   const handleExportPDF = async () => {
     if (!reportRef.current || isExporting) return;
@@ -5570,7 +5578,7 @@ function SettingsScreen() {
 function DailyClosingScreen({ orders }: { orders: Order[] }) {
   const today = "2026-06-20";
   const todayOrders = orders.filter(o => o.date === today);
-  const salesToday = todayOrders.filter(o => o.status !== "void").reduce((a, b) => a + b.amount, 0);
+  const salesToday = todayOrders.filter(o => o.status !== "void" && o.status !== "returned").reduce((a, b) => a + b.amount, 0);
   const deliveredToday = todayOrders.filter(o => o.status === "delivered").length;
   
   const pendingTracking = orders.filter(o => !o.trackingNo && o.status !== "void").length;
