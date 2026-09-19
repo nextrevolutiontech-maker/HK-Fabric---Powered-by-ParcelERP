@@ -5961,29 +5961,33 @@ function ProductSalesLedgerScreen({ setScreen, onViewOrder }: { setScreen: (s: S
     const headers = [
       "Order #", "Order Date", "Order Type", "Handled By", "Customer Name",
       "Customer Phone", "City", "Province", "Product Description", "Qty",
-      "Unit Price (PKR)", "Line Total (PKR)", "Order Grand Total (PKR)",
+      "Unit Price (PKR)", "Line Total (PKR)", "Delivery Charges / DC (PKR)", "Order Grand Total (PKR)",
       "Advance Payment (PKR)", "Net COD Amount (PKR)", "Courier", "Tracking #"
     ];
 
-    const rows = items.map((i: any) => [
-      `"${i.orderNo || ''}"`,
-      `"${i.orderDate ? new Date(i.orderDate).toISOString().split('T')[0] : ''}"`,
-      `"${i.orderType || ''}"`,
-      `"${i.handledBy || ''}"`,
-      `"${(i.customerName || '').replace(/"/g, '""')}"`,
-      `"${i.customerPhone || ''}"`,
-      `"${(i.customerCity || '').replace(/"/g, '""')}"`,
-      `"${(i.customerProvince || '').replace(/"/g, '""')}"`,
-      `"${(i.productName || '').replace(/"/g, '""')}"`,
-      i.qty,
-      i.unitPrice,
-      i.lineTotal,
-      i.orderTotal,
-      i.advancePayment,
-      i.netCodAmount,
-      `"${i.courierName || ''}"`,
-      `"${i.trackingNo || ''}"`
-    ]);
+    const rows = items.map((i: any, index: number) => {
+      const isFirstItemOfOrder = index === 0 || items[index - 1].orderNo !== i.orderNo;
+      return [
+        `"${i.orderNo || ''}"`,
+        `"${i.orderDate ? new Date(i.orderDate).toISOString().split('T')[0] : ''}"`,
+        `"${i.orderType || ''}"`,
+        `"${i.handledBy || ''}"`,
+        `"${(i.customerName || '').replace(/"/g, '""')}"`,
+        `"${i.customerPhone || ''}"`,
+        `"${(i.customerCity || '').replace(/"/g, '""')}"`,
+        `"${(i.customerProvince || '').replace(/"/g, '""')}"`,
+        `"${(i.productName || '').replace(/"/g, '""')}"`,
+        i.qty,
+        i.unitPrice,
+        i.lineTotal,
+        isFirstItemOfOrder && i.deliveryCharges && i.deliveryCharges > 0 ? i.deliveryCharges : '"-"',
+        i.orderTotal,
+        i.advancePayment,
+        i.netCodAmount,
+        `"${i.courierName || ''}"`,
+        `"${i.trackingNo || ''}"`
+      ];
+    });
 
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -6171,7 +6175,7 @@ function ProductSalesLedgerScreen({ setScreen, onViewOrder }: { setScreen: (s: S
             </div>
           ) : (
             <div className="overflow-x-auto w-full scrollbar-thin">
-              <table className="w-full text-left text-xs min-w-[950px]">
+              <table className="w-full text-left text-xs min-w-[1050px]">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-mono text-[10px]">
                   <tr>
                     <th className="py-3 px-3.5 whitespace-nowrap min-w-[130px]">Order #</th>
@@ -6182,81 +6186,92 @@ function ProductSalesLedgerScreen({ setScreen, onViewOrder }: { setScreen: (s: S
                     <th className="py-3 px-3.5 whitespace-nowrap text-center min-w-[60px]">Qty</th>
                     <th className="py-3 px-3.5 whitespace-nowrap text-right min-w-[90px]">Unit Price</th>
                     <th className="py-3 px-3.5 whitespace-nowrap text-right min-w-[100px]">Item Total</th>
+                    <th className="py-3 px-3.5 whitespace-nowrap text-right min-w-[90px]">DC</th>
                     <th className="py-3 px-3.5 whitespace-nowrap text-right min-w-[100px]">Parcel Total</th>
                     <th className="py-3 px-3.5 whitespace-nowrap text-right min-w-[100px]">Net COD</th>
                     <th className="py-3 px-3.5 whitespace-nowrap text-center min-w-[65px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-sans">
-                  {items.map((i: any, index: number) => (
-                    <tr key={`${i.id}-${index}`} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono font-bold text-[#0F172A] whitespace-nowrap">
-                        <button onClick={() => onViewOrder(i.orderNo)} className="hover:underline text-indigo-600 whitespace-nowrap inline-block">
-                          {i.orderNo}
-                        </button>
-                        <div className="text-[10px] text-slate-400 font-normal font-sans">{i.handledBy}</div>
-                      </td>
-                      <td className="py-3 px-3.5 font-mono text-slate-500 whitespace-nowrap">
-                        {i.orderDate ? new Date(i.orderDate).toISOString().split('T')[0] : '—'}
-                      </td>
-                      <td className="py-3 px-3.5 font-mono whitespace-nowrap">
-                        <span className={cn(
-                          "px-2 py-0.5 rounded font-extrabold text-[10px] whitespace-nowrap inline-block",
-                          i.orderType === "COD" ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60" : "bg-indigo-50 text-indigo-700 border border-indigo-200/60"
-                        )}>
-                          {i.orderType}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3.5 min-w-[160px]">
-                        <div className="font-semibold text-slate-900 truncate max-w-[180px]">{i.customerName}</div>
-                        <div className="text-[11px] text-slate-400 font-mono whitespace-nowrap flex items-center gap-1">
-                          <span>{i.customerPhone}</span>
-                          {i.customerCity && (
-                            <>
-                              <span>•</span>
-                              <span className="truncate max-w-[90px]">{i.customerCity}</span>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 px-3.5 font-medium text-slate-900 min-w-[200px] max-w-[280px]">
-                        <div className="font-semibold text-slate-900 break-words">{i.productName}</div>
-                        {i.trackingNo && (
-                          <div className="text-[10px] text-slate-400 font-mono whitespace-nowrap truncate">
-                            Track: {i.trackingNo} ({i.courierName})
+                  {items.map((i: any, index: number) => {
+                    const isFirstItemOfOrder = index === 0 || items[index - 1].orderNo !== i.orderNo;
+                    return (
+                      <tr key={`${i.id}-${index}`} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-3.5 font-mono font-bold text-[#0F172A] whitespace-nowrap">
+                          <button onClick={() => onViewOrder(i.orderNo)} className="hover:underline text-indigo-600 whitespace-nowrap inline-block">
+                            {i.orderNo}
+                          </button>
+                          <div className="text-[10px] text-slate-400 font-normal font-sans">{i.handledBy}</div>
+                        </td>
+                        <td className="py-3 px-3.5 font-mono text-slate-500 whitespace-nowrap">
+                          {i.orderDate ? new Date(i.orderDate).toISOString().split('T')[0] : '—'}
+                        </td>
+                        <td className="py-3 px-3.5 font-mono whitespace-nowrap">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded font-extrabold text-[10px] whitespace-nowrap inline-block",
+                            i.orderType === "COD" ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60" : "bg-indigo-50 text-indigo-700 border border-indigo-200/60"
+                          )}>
+                            {i.orderType}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3.5 min-w-[160px]">
+                          <div className="font-semibold text-slate-900 truncate max-w-[180px]">{i.customerName}</div>
+                          <div className="text-[11px] text-slate-400 font-mono whitespace-nowrap flex items-center gap-1">
+                            <span>{i.customerPhone}</span>
+                            {i.customerCity && (
+                              <>
+                                <span>•</span>
+                                <span className="truncate max-w-[90px]">{i.customerCity}</span>
+                              </>
+                            )}
                           </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-3.5 text-center font-mono font-extrabold text-slate-900 whitespace-nowrap">
-                        <span className="px-2 py-0.5 bg-slate-100 rounded-md border border-slate-200">{i.qty}</span>
-                      </td>
-                      <td className="py-3 px-3.5 text-right font-mono text-slate-700 whitespace-nowrap">
-                        {formatPKR(i.unitPrice)}
-                      </td>
-                      <td className="py-3 px-3.5 text-right font-mono font-extrabold text-[#0F172A] whitespace-nowrap">
-                        {formatPKR(i.lineTotal)}
-                      </td>
-                      <td className="py-3 px-3.5 text-right font-mono text-slate-600 whitespace-nowrap">
-                        {formatPKR(i.orderTotal)}
-                      </td>
-                      <td className="py-3 px-3.5 text-right font-mono whitespace-nowrap">
-                        {i.orderType === "COD" ? (
-                          <span className="font-bold text-[#D4AF37]">{formatPKR(i.netCodAmount)}</span>
-                        ) : (
-                          <span className="text-emerald-600 text-[11px] font-semibold">Fully Paid</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3.5 text-center whitespace-nowrap">
-                        <button
-                          onClick={() => onViewOrder(i.orderNo)}
-                          className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors"
-                          title="View Full Parcel Details"
-                        >
-                          <Eye size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-3 px-3.5 font-medium text-slate-900 min-w-[200px] max-w-[280px]">
+                          <div className="font-semibold text-slate-900 break-words">{i.productName}</div>
+                          {i.trackingNo && (
+                            <div className="text-[10px] text-slate-400 font-mono whitespace-nowrap truncate">
+                              Track: {i.trackingNo} ({i.courierName})
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-3.5 text-center font-mono font-extrabold text-slate-900 whitespace-nowrap">
+                          <span className="px-2 py-0.5 bg-slate-100 rounded-md border border-slate-200">{i.qty}</span>
+                        </td>
+                        <td className="py-3 px-3.5 text-right font-mono text-slate-700 whitespace-nowrap">
+                          {formatPKR(i.unitPrice)}
+                        </td>
+                        <td className="py-3 px-3.5 text-right font-mono font-extrabold text-[#0F172A] whitespace-nowrap">
+                          {formatPKR(i.lineTotal)}
+                        </td>
+                        <td className="py-3 px-3.5 text-right font-mono whitespace-nowrap">
+                          {isFirstItemOfOrder && i.deliveryCharges && i.deliveryCharges > 0 ? (
+                            <span className="font-bold text-amber-700">{formatPKR(i.deliveryCharges)}</span>
+                          ) : (
+                            <span className="text-slate-400 font-bold">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3.5 text-right font-mono text-slate-600 whitespace-nowrap">
+                          {formatPKR(i.orderTotal)}
+                        </td>
+                        <td className="py-3 px-3.5 text-right font-mono whitespace-nowrap">
+                          {i.orderType === "COD" ? (
+                            <span className="font-bold text-[#D4AF37]">{formatPKR(i.netCodAmount)}</span>
+                          ) : (
+                            <span className="text-emerald-600 text-[11px] font-semibold">Fully Paid</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                          <button
+                            onClick={() => onViewOrder(i.orderNo)}
+                            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors"
+                            title="View Full Parcel Details"
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
