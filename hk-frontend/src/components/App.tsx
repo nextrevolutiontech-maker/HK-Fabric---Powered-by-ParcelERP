@@ -403,6 +403,81 @@ function FieldInput({ label, required, ...props }: InputHTMLAttributes<HTMLInput
   );
 }
 
+function SmartLoader({ 
+  label = "Loading Logistics Data...", 
+  subLabel = "Synchronizing live database records", 
+  variant = "card" 
+}: { 
+  label?: string; 
+  subLabel?: string; 
+  variant?: "card" | "table" | "full" | "inline"; 
+}) {
+  if (variant === "inline") {
+    return (
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/5 border border-slate-200/80 text-slate-700 text-xs font-semibold">
+        <div className="relative w-4 h-4 flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full border-2 border-[#D4AF37]/40 border-t-[#0F172A] animate-spin" />
+          <div className="w-1.5 h-1.5 bg-[#D4AF37] rounded-full animate-pulse" />
+        </div>
+        <span>{label}</span>
+      </div>
+    );
+  }
+
+  if (variant === "table") {
+    return (
+      <div className="p-8 space-y-4 font-sans">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#0F172A] flex items-center justify-center shadow-md animate-pulse">
+              <Package size={18} className="text-[#D4AF37]" />
+            </div>
+            <div>
+              <div className="h-4 w-40 bg-slate-200 rounded-md animate-pulse" />
+              <div className="h-3 w-28 bg-slate-100 rounded-md mt-1.5 animate-pulse" />
+            </div>
+          </div>
+          <div className="h-7 w-32 bg-slate-100 rounded-lg animate-pulse" />
+        </div>
+
+        <div className="space-y-2.5 pt-1">
+          {[1, 2, 3, 4].map((idx) => (
+            <div key={idx} className="h-12 w-full bg-slate-50/70 border border-slate-100 rounded-xl px-4 flex items-center justify-between gap-4 animate-pulse">
+              <div className="h-3.5 w-24 bg-slate-200 rounded font-mono" />
+              <div className="h-3.5 w-36 bg-slate-200 rounded" />
+              <div className="h-3.5 w-20 bg-slate-200 rounded" />
+              <div className="h-3.5 w-16 bg-emerald-100 rounded" />
+              <div className="h-7 w-20 bg-slate-200 rounded-lg" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-12 text-center flex flex-col items-center justify-center space-y-4 font-sans">
+      <div className="relative">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#0F172A] via-slate-800 to-[#0F172A] p-0.5 shadow-xl animate-pulse">
+          <div className="w-full h-full bg-[#0F172A] rounded-[14px] flex items-center justify-center relative overflow-hidden">
+            <Package size={24} className="text-[#D4AF37] animate-bounce" />
+          </div>
+        </div>
+        <div className="absolute -inset-2 border-2 border-transparent border-t-[#D4AF37] border-r-[#0F172A] rounded-2xl animate-spin" />
+      </div>
+
+      <div className="space-y-1 max-w-xs">
+        <h4 className="text-sm font-extrabold text-[#0F172A] tracking-tight">{label}</h4>
+        <p className="text-[11px] text-slate-400 font-mono leading-relaxed">{subLabel}</p>
+      </div>
+
+      <div className="w-44 h-1.5 bg-slate-100 rounded-full overflow-hidden relative border border-slate-200/60 shadow-inner">
+        <div className="absolute inset-y-0 bg-gradient-to-r from-[#0F172A] via-[#D4AF37] to-[#0F172A] w-1/2 rounded-full animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
 function FieldSelect({ label, children, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -2144,9 +2219,7 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
-            <div className="h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Loading COD parcels...
-          </div>
+          <SmartLoader variant="table" label="Loading COD Parcels..." subLabel="Fetching real-time COD collection history" />
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-xs">
             No COD parcels found matching your filters.
@@ -2500,9 +2573,7 @@ function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder,
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
-            <div className="h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Loading Non-COD parcels...
-          </div>
+          <SmartLoader variant="table" label="Loading Non-COD Parcels..." subLabel="Fetching advance paid shipment records" />
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-xs">
             No Non-COD parcels found matching your filters.
@@ -2715,7 +2786,23 @@ function CreateOrderScreen({
   const subtotal = products.reduce((s, p) => s + (Number(p.qty) || 0) * (Number(p.price) || 0), 0);
   const grandTotal = subtotal + deliveryCharges;
   const remainingAmount = Math.max(0, grandTotal - advancePayment);
-  const orderIdToSave = editOrderId || `HKF-2026-${String(orders.length + 1).padStart(6, "0")}`;
+
+  const maxOrderNum = useMemo(() => {
+    let maxNum = 0;
+    for (const o of orders) {
+      if (o.id && o.id.startsWith("HKF-2026-")) {
+        const match = o.id.match(/\d+$/);
+        if (match) {
+          const num = parseInt(match[0], 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      }
+    }
+    return maxNum;
+  }, [orders]);
+
+  const previewNumStr = String(Math.max(orders.length + 1, maxOrderNum + 1)).padStart(6, "0");
+  const orderIdToSave = editOrderId || `HKF-2026-${previewNumStr}`;
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -6164,9 +6251,7 @@ function ProductSalesLedgerScreen({ setScreen, onViewOrder }: { setScreen: (s: S
           </div>
 
           {isLoading ? (
-            <div className="p-12 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
-              <div className="h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Loading itemized sales ledger...
-            </div>
+            <SmartLoader variant="table" label="Loading Sales Ledger..." subLabel="Compiling itemized customer product transactions" />
           ) : items.length === 0 ? (
             <div className="p-16 text-center text-slate-400 text-xs space-y-1">
               <Package size={32} className="mx-auto text-slate-300 mb-2" />
@@ -6291,9 +6376,7 @@ function ProductSalesLedgerScreen({ setScreen, onViewOrder }: { setScreen: (s: S
           </div>
 
           {isLoading ? (
-            <div className="p-12 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
-              <div className="h-4 w-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Calculating product sales breakdown...
-            </div>
+            <SmartLoader variant="table" label="Calculating Product Summary..." subLabel="Aggregating sales quantities and revenue per SKU" />
           ) : productSummary.length === 0 ? (
             <div className="p-16 text-center text-slate-400 text-xs">
               No product summary data available for current selection.
@@ -6645,7 +6728,7 @@ export default function App() {
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['orders'],
     queryFn: async () => {
-      const res = await fetch('/api/orders');
+      const res = await fetch('/api/orders?limit=1000');
       const raw = (await safeResponseJson(res));
       const data = Array.isArray(raw) ? raw : (raw?.orders || []);
       return data.map((o: any) => ({
@@ -6704,7 +6787,7 @@ export default function App() {
         return "offline";
       }
       const payload = {
-        orderNo: newOrder.id && newOrder.id.startsWith("HKF-") && orders.some(o => o.id === newOrder.id) ? newOrder.id : undefined,
+        orderNo: undefined,
         customerDetails: {
           phone: newOrder.whatsapp,
           name: newOrder.customer,
@@ -6728,7 +6811,7 @@ export default function App() {
         overrideDuplicate,
       };
 
-      const idempotencyKey = `order-${newOrder.id}-${newOrder.whatsapp}-${newOrder.amount}`;
+      const idempotencyKey = `order-${Date.now()}-${newOrder.whatsapp}-${newOrder.amount}`;
       
       try {
         const res = await fetch('/api/orders', {
@@ -6865,8 +6948,8 @@ export default function App() {
   };
 
   const handleSaveOrder = async (newOrder: Order) => {
-    const existing = orders.find((o: any) => o.id === newOrder.id);
-    if (existing) {
+    const isEditing = Boolean(selectedOrderId);
+    if (isEditing && selectedOrderId) {
       const payload = {
         customerDetails: {
           name: newOrder.customer,
@@ -6891,7 +6974,7 @@ export default function App() {
         status: newOrder.status,
         codStatus: newOrder.codStatus,
       };
-      return await updateOrderMut.mutateAsync({ id: newOrder.id, data: payload });
+      return await updateOrderMut.mutateAsync({ id: selectedOrderId, data: payload });
     } else {
       return await createOrderMut.mutateAsync(newOrder);
     }
@@ -6964,11 +7047,8 @@ export default function App() {
 
   if (!mounted || authChecking) {
     return (
-      <div className="min-h-screen bg-[#0F172A] flex items-center justify-center">
-        <div className="text-white text-sm font-medium flex items-center gap-3">
-          <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          <span>Verifying authentication...</span>
-        </div>
+      <div className="min-h-screen bg-[#0F172A] flex flex-col items-center justify-center p-4">
+        <SmartLoader label="Verifying Authentication..." subLabel="Securing ParcelERP session token" />
       </div>
     );
   }

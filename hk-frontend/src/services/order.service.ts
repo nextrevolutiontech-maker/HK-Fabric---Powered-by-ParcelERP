@@ -115,12 +115,6 @@ export const OrderService = {
       endDateStr 
     } = options;
 
-    // Database Self-Correction: Automatically normalize any legacy zero-balance COD orders to NON-COD
-    await prisma.order.updateMany({
-      where: { totalAmount: 0, orderType: 'COD' },
-      data: { orderType: 'NON-COD' }
-    });
-
     const where: any = {};
 
     if (orderType && orderType !== 'all' && orderType !== 'ALL') {
@@ -586,7 +580,7 @@ export const OrderService = {
         } else {
           const lastOrder = await tx.order.findFirst({
             where: { orderNo: { startsWith: 'HKF-2026-' } },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { orderNo: 'desc' },
             select: { orderNo: true }
           });
           let nextNum = (await tx.order.count()) + 1;
@@ -604,7 +598,7 @@ export const OrderService = {
       } else {
         const lastOrder = await tx.order.findFirst({
           where: { orderNo: { startsWith: 'HKF-2026-' } },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { orderNo: 'desc' },
           select: { orderNo: true }
         });
         let nextNum = (await tx.order.count()) + 1;
@@ -1054,18 +1048,38 @@ export const OrderService = {
     }
 
     // Specific action handlers
-    if (activity.action === "COD Received" || activity.action.includes("COD Received")) {
+    if (activity.action === "Order Created" || activity.action.includes("Order Created") || activity.action.includes("Order Creation")) {
+      targetStatus = "void";
+      targetCodStatus = "PENDING";
+      revertActionSummary = `Reverted Order Creation for Order #${order.orderNo} (Order marked VOID)`;
+    } else if (activity.action === "COD Received" || activity.action.includes("COD Received")) {
       targetStatus = "shipped";
       targetCodStatus = "PENDING";
-    }
-
-    if (activity.action === "Void Order" || activity.action.includes("VOID") || activity.action.includes("void")) {
-      if (targetStatus === "void" || targetStatus === "VOID") {
-        targetStatus = "shipped";
-      }
+    } else if (activity.action === "Void Order" || activity.action.includes("VOID") || activity.action.includes("void")) {
+      targetStatus = "confirmed";
+      revertActionSummary = `Reverted Void status for Order #${order.orderNo} (Order restored)`;
     }
 
     return await prisma.$transaction(async (tx) => {
+      // Handle customer stats adjustments
+      if ((activity.action === "Order Created" || activity.action.includes("Order Created")) && order.customerId) {
+        await tx.customer.update({
+          where: { id: order.customerId },
+          data: {
+            totalOrders: { decrement: 1 },
+            totalSpent: { decrement: order.totalAmount }
+          }
+        });
+      } else if ((activity.action === "Void Order" || activity.action.includes("VOID") || activity.action.includes("void")) && order.customerId) {
+        await tx.customer.update({
+          where: { id: order.customerId },
+          data: {
+            totalOrders: { increment: 1 },
+            totalSpent: { increment: order.totalAmount }
+          }
+        });
+      }
+
       // If reverting COD Received, delete CodPayment records created for this order
       if (activity.action === "COD Received" || activity.action.includes("COD Received")) {
         await tx.codPayment.deleteMany({ where: { orderId: targetId } });
@@ -1077,7 +1091,7 @@ export const OrderService = {
         data: {
           status: targetStatus,
           codStatus: targetCodStatus,
-          voidReason: targetStatus === "void" ? order.voidReason : null,
+          voidReason: targetStatus === "void" ? "Order Creation Reverted via Activity Log" : null,
         },
         include: { customer: true, items: true, trackingEntries: { orderBy: { createdAt: 'desc' } } }
       });
