@@ -32,7 +32,7 @@ interface Product { name: string; qty: number; price: number }
 interface Order {
   _id?: string;
   id: string; customer: string; whatsapp: string; city: string;
-  address: string; amount: number; handledBy: "Sami" | "Abid";
+  address: string; amount: number; handledBy: "Sami" | "Abid" | "Ahsan";
   status: OrderStatus; codStatus: CODStatus; date: string;
   time?: string;
   createdAt?: string | Date;
@@ -755,7 +755,7 @@ function Sidebar({ screen, setScreen, open, onClose }: {
             <User size={14} className="text-white" />
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-medium text-white truncate">Sami / Abid</div>
+            <div className="text-sm font-medium text-white truncate">Sami / Abid / Ahsan</div>
             <div className="text-[11px] text-white/60 font-medium">Staff Account</div>
           </div>
         </div>
@@ -1924,7 +1924,7 @@ function DashboardScreen({ setScreen, onViewOrder, orders, onRevertActivity }: {
                       <td className="px-4 py-3">
                         <span className={cn(
                           "px-2 py-0.5 rounded text-[10px] font-bold",
-                          o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700" : "bg-purple-50 text-purple-700"
+                          o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700" : o.handledBy === "Abid" ? "bg-purple-50 text-purple-700" : "bg-emerald-50 text-emerald-700"
                         )}>
                           {o.handledBy}
                         </span>
@@ -2007,7 +2007,7 @@ function CODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder, on
   setScreen: (s: Screen) => void;
   onViewOrder: (id: string) => void;
   onEditOrder: (id: string) => void;
-  onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
+  onVoidOrder: (id: string, performer: "Sami" | "Abid" | "Ahsan") => void;
   onUpdateStatus?: (id: string, status: OrderStatus, hasTracking?: boolean) => void;
   onReceiveCOD?: (id: string, date: string, hasTracking?: boolean) => void;
   onEditTracking?: (order: any) => void;
@@ -2389,7 +2389,7 @@ function NonCODParcelsScreen({ setScreen, onViewOrder, onEditOrder, onVoidOrder,
   setScreen: (s: Screen) => void;
   onViewOrder: (id: string) => void;
   onEditOrder: (id: string) => void;
-  onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
+  onVoidOrder: (id: string, performer: "Sami" | "Abid" | "Ahsan") => void;
   onUpdateStatus?: (id: string, status: OrderStatus, hasTracking?: boolean) => void;
   onEditTracking?: (order: any) => void;
 }) {
@@ -2733,7 +2733,7 @@ function CreateOrderScreen({
   editOrderId: string | null;
   clearEditId: () => void;
 }) {
-  const [handledBy, setHandledBy] = useState<"Sami" | "Abid">("Sami");
+  const [handledBy, setHandledBy] = useState<"Sami" | "Abid" | "Ahsan">("Sami");
   const [whatsapp, setWhatsapp] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [altPhone, setAltPhone] = useState("");
@@ -3016,26 +3016,6 @@ function CreateOrderScreen({
             <p className="text-xs text-slate-500 mt-0.5">Enter customer details, payment setup, and item breakdown.</p>
           </div>
         </div>
-        
-        {/* Agent Toggle Pills */}
-        <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200/80">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2">Handled By:</span>
-          {(["Sami", "Abid"] as const).map(name => (
-            <button 
-              key={name} 
-              type="button"
-              onClick={() => setHandledBy(name)}
-              className={cn(
-                "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
-                handledBy === name
-                  ? "bg-[#0F172A] text-white shadow-sm"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-              )}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
       </div>
 
       {errorMsg && (
@@ -3062,6 +3042,30 @@ function CreateOrderScreen({
                 </h2>
               </div>
               <span className="text-xs text-slate-400 font-mono">* Required fields</span>
+            </div>
+
+            {/* Handled By Selector (Placed on Left side inside Customer Details Form) */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between flex-wrap gap-3">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <User size={16} className="text-indigo-600" /> Handled By: <span className="text-red-500">*</span>
+              </span>
+              <div className="flex items-center gap-2 bg-slate-200/70 p-1 rounded-xl">
+                {(["Sami", "Abid", "Ahsan"] as const).map(name => (
+                  <button 
+                    key={name} 
+                    type="button"
+                    onClick={() => setHandledBy(name)}
+                    className={cn(
+                      "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
+                      handledBy === name
+                        ? "bg-[#0F172A] text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                    )}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {existing && (
@@ -3567,7 +3571,7 @@ function OrdersScreen({
   onViewOrder: (id: string) => void;
   onEditOrder: (id: string) => void;
   orders: Order[];
-  onVoidOrder: (id: string, performer: "Sami" | "Abid") => void;
+  onVoidOrder: (id: string, performer: "Sami" | "Abid" | "Ahsan") => void;
   onUpdateStatus?: (id: string, status: OrderStatus, hasTracking?: boolean) => void;
   onEditTracking?: (order: any) => void;
 }) {
@@ -3739,6 +3743,7 @@ function OrdersScreen({
           <option value="all">All Staff</option>
           <option value="Sami">Sami</option>
           <option value="Abid">Abid</option>
+          <option value="Ahsan">Ahsan</option>
         </select>
         
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
@@ -3861,7 +3866,7 @@ function OrdersScreen({
                       <td className="px-6 py-4 text-right font-mono text-sm font-medium text-slate-900">{formatPKR(o.amount)}</td>
                       <td className="px-6 py-4 hidden sm:table-cell">
                         <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-medium tracking-wide",
-                          o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20"
+                          o.handledBy === "Sami" ? "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20" : o.handledBy === "Abid" ? "bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20" : "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20"
                         )}>{o.handledBy}</span>
                       </td>
                       <td className="px-6 py-4 font-mono text-xs">
@@ -5414,7 +5419,9 @@ function ActivityLogScreen({ activityLogs, onRevertActivity }: { activityLogs: a
                     "px-2.5 py-0.5 rounded-md text-[11px] font-bold border",
                     (log.performedBy || log.by) === "Sami"
                       ? "bg-indigo-50 text-indigo-700 border-indigo-200/60"
-                      : "bg-purple-50 text-purple-700 border-purple-200/60"
+                      : (log.performedBy || log.by) === "Abid"
+                      ? "bg-purple-50 text-purple-700 border-purple-200/60"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-200/60"
                   )}>
                     {log.performedBy || log.by || "System"}
                   </span>
@@ -5497,7 +5504,9 @@ function ActivityLogScreen({ activityLogs, onRevertActivity }: { activityLogs: a
                         "px-2.5 py-1 rounded-md text-[11px] font-bold border inline-block",
                         (log.performedBy || log.by) === "Sami"
                           ? "bg-indigo-50 text-indigo-700 border-indigo-200/60"
-                          : "bg-purple-50 text-purple-700 border-purple-200/60"
+                          : (log.performedBy || log.by) === "Abid"
+                          ? "bg-purple-50 text-purple-700 border-purple-200/60"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200/60"
                       )}>
                         {log.performedBy || log.by || "System"}
                       </span>
@@ -6996,7 +7005,7 @@ export default function App() {
     setEditingTrackingOrder(null);
   };
 
-  const handleVoidOrder = (orderId: string, performer: "Sami" | "Abid") => {
+  const handleVoidOrder = (orderId: string, performer: "Sami" | "Abid" | "Ahsan") => {
     const pin = prompt("Enter Owner PIN to Void this order:");
     if (!pin) return;
     updateOrderMut.mutate({
