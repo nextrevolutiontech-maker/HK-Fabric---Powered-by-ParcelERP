@@ -14,7 +14,7 @@ import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from "recharts";
-import Tesseract from "tesseract.js";
+// tesseract.js is dynamically imported at call site to keep initial bundle small
 import { normalizePhone, getProvinceFromCity, PROVINCE_CITIES_MAP } from "@/lib/normalization";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -779,6 +779,26 @@ const SidebarMemo = memo(Sidebar);
 
 // ─── Top Navbar Header ─────────────────────────────────────────────────────────
 
+// Clock extracted into its own component so only it re-renders every second
+const ClockDisplay = memo(function ClockDisplay() {
+  const [time, setTime] = useState<Date | null>(null);
+  useEffect(() => {
+    setTime(new Date());
+    const t = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const dateStr = time ? time.toLocaleDateString("en-PK", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : "";
+  const timeStr = time ? time.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+
+  return (
+    <div className="hidden sm:flex flex-col items-end border-l border-slate-200 pl-3">
+      <span className="text-[10px] text-slate-400 leading-none">{dateStr}</span>
+      <span className="text-xs font-mono font-bold text-[#0F172A] mt-0.5 leading-none">{timeStr}</span>
+    </div>
+  );
+});
+
 function Header({ 
   screen, 
   setScreen, 
@@ -798,15 +818,6 @@ function Header({
   isOffline?: boolean;
   onSyncClick?: () => void;
 }) {
-  const [time, setTime] = useState<Date | null>(null);
-  useEffect(() => {
-    setTime(new Date());
-    const t = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  const dateStr = time ? time.toLocaleDateString("en-PK", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : "";
-  const timeStr = time ? time.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
 
   const [installPrompt, setInstallPrompt] = useState<any>(null);
 
@@ -910,10 +921,9 @@ function Header({
             </a>
           </div>
 
-          <div className="hidden sm:flex flex-col items-end border-l border-slate-200 pl-3">
-            <span className="text-[10px] text-slate-400 leading-none">{dateStr}</span>
-            <span className="text-xs font-mono font-bold text-[#0F172A] mt-0.5 leading-none">{timeStr}</span>
-          </div>
+
+          <ClockDisplay />
+
 
           {user && (
             <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
@@ -4864,6 +4874,7 @@ function SettlementsScreen() {
       setUploaded(true);
       setIsProcessing(true);
       try {
+        const { default: Tesseract } = await import("tesseract.js");
         const result = await Tesseract.recognize(file, 'eng');
         const text = result.data.text;
         setRawText(text);
@@ -6736,8 +6747,10 @@ export default function App() {
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['orders'],
+    // Fetch 300 most recent orders (was 1000 — reduces initial load significantly)
+    // Server already sorts by createdAt desc so newest 300 are fetched
     queryFn: async () => {
-      const res = await fetch('/api/orders?limit=1000');
+      const res = await fetch('/api/orders?limit=300');
       const raw = (await safeResponseJson(res));
       const data = Array.isArray(raw) ? raw : (raw?.orders || []);
       return data.map((o: any) => ({
@@ -6765,7 +6778,9 @@ export default function App() {
         paymentType: o.paymentType || "Courier",
         receivedDate: o.codPayments?.[0]?.receivedDate ? new Date(o.codPayments[0].receivedDate).toISOString().split('T')[0] : undefined
       }));
-    }
+    },
+    // Keep orders fresh for 2 minutes — no refetch on every screen switch
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: activityLogs = [] } = useQuery({
@@ -6774,7 +6789,9 @@ export default function App() {
       const res = await fetch('/api/activities');
       if (!res.ok) throw new Error("Failed to fetch activities");
       return (await safeResponseJson(res)) || [];
-    }
+    },
+    // Activity logs don't change every second — 5 minute cache
+    staleTime: 5 * 60 * 1000,
   });
 
   const [globalToast, setGlobalToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);

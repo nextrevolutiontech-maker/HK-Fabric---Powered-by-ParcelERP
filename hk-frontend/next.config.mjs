@@ -13,9 +13,12 @@ const withPWA = withPWAInit({
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Enable gzip/brotli compression for smaller JS/CSS transfer
+  compress: true,
   async headers() {
     return [
       {
+        // Security headers for all routes
         source: '/:path*',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
@@ -24,8 +27,23 @@ const nextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
         ],
       },
+      {
+        // Long-term cache for static assets (images, icons, fonts)
+        source: '/icons/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        // Long-term cache for favicon
+        source: '/favicon.ico',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=86400' },
+        ],
+      },
     ];
   },
 };
 
 export default withPWA(nextConfig);
+

@@ -321,41 +321,6 @@ export const OrderService = {
       ...dateFilter
     };
 
-    // 1. Month / Filtered Range Aggregations
-    const codCount = await prisma.order.count({ where: { ...baseWhere, orderType: 'COD' } });
-    const codSalesAgg = await prisma.order.aggregate({ where: { ...baseWhere, orderType: 'COD' }, _sum: { totalAmount: true } });
-
-    const pendingCodOrders = await prisma.order.findMany({
-      where: { ...baseWhere, orderType: 'COD', codStatus: { in: ['PENDING', 'pending', 'Pending'] } },
-      select: { totalAmount: true, advancePayment: true }
-    });
-    const codPendingAmount = pendingCodOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
-
-    const receivedCodOrders = await prisma.order.findMany({
-      where: { ...baseWhere, orderType: 'COD', codStatus: { in: ['RECEIVED', 'received', 'Received'] } },
-      select: { totalAmount: true, advancePayment: true }
-    });
-    const codReceivedAmount = receivedCodOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
-
-    const nonCodCount = await prisma.order.count({ where: { ...baseWhere, orderType: 'NON-COD' } });
-    const nonCodSalesAgg = await prisma.order.aggregate({ where: { ...baseWhere, orderType: 'NON-COD' }, _sum: { totalAmount: true } });
-    const advanceAgg = await prisma.order.aggregate({ where: baseWhere, _sum: { advancePayment: true } });
-
-    const codSales = codSalesAgg._sum.totalAmount || 0;
-    const nonCodSales = nonCodSalesAgg._sum.totalAmount || 0;
-    const totalAdvance = advanceAgg._sum.advancePayment || 0;
-
-    // Returned Orders Metrics (Deducted from sales totals)
-    const returnedCount = await prisma.order.count({
-      where: { status: { in: ['returned', 'RETURNED'] }, ...dateFilter }
-    });
-    const returnedSalesAgg = await prisma.order.aggregate({
-      where: { status: { in: ['returned', 'RETURNED'] }, ...dateFilter },
-      _sum: { totalAmount: true }
-    });
-    const returnedSales = returnedSalesAgg._sum.totalAmount || 0;
-
-    // 2. Yearly Grand Total Aggregations (Year-To-Date)
     const activeYear = year || new Date().getFullYear();
     const { startPKT: yearStartPKT, endPKT: yearEndPKT } = getPKTYearBounds(activeYear);
     const yearWhere = {
@@ -363,12 +328,6 @@ export const OrderService = {
       createdAt: { gte: yearStartPKT, lte: yearEndPKT }
     };
 
-    const yearCodCount = await prisma.order.count({ where: { ...yearWhere, orderType: 'COD' } });
-    const yearNonCodCount = await prisma.order.count({ where: { ...yearWhere, orderType: 'NON-COD' } });
-    const yearSalesAgg = await prisma.order.aggregate({ where: yearWhere, _sum: { totalAmount: true } });
-    const yearTotalSales = yearSalesAgg._sum.totalAmount || 0;
-
-    // 3. Uncleared Legacy Pending COD (Pending COD before current target month or overall)
     const legacyPendingWhere: any = {
       status: { notIn: ['void', 'VOID', 'returned', 'RETURNED'] },
       orderType: 'COD',
@@ -377,17 +336,67 @@ export const OrderService = {
     if (targetStartPKT) {
       legacyPendingWhere.createdAt = { lt: targetStartPKT };
     }
-    const legacyPendingOrders = await prisma.order.findMany({
-      where: legacyPendingWhere,
-      select: { totalAmount: true, advancePayment: true }
-    });
-    const legacyPendingAmount = legacyPendingOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
 
-    // 4. All-time Overall Metrics (for reference)
     const allTimeWhere = { status: { notIn: ['void', 'VOID', 'returned', 'RETURNED'] } };
-    const allTimeCount = await prisma.order.count({ where: allTimeWhere });
-    const allTimeSalesAgg = await prisma.order.aggregate({ where: allTimeWhere, _sum: { totalAmount: true } });
+
+    // ─── Run ALL independent DB queries in PARALLEL (was serial — 10+ awaits) ─────
+    const [
+      codCount,
+      codSalesAgg,
+      pendingCodOrders,
+      receivedCodOrders,
+      nonCodCount,
+      nonCodSalesAgg,
+      advanceAgg,
+      returnedCount,
+      returnedSalesAgg,
+      yearCodCount,
+      yearNonCodCount,
+      yearSalesAgg,
+      legacyPendingOrders,
+      allTimeCount,
+      allTimeSalesAgg,
+    ] = await Promise.all([
+      prisma.order.count({ where: { ...baseWhere, orderType: 'COD' } }),
+      prisma.order.aggregate({ where: { ...baseWhere, orderType: 'COD' }, _sum: { totalAmount: true } }),
+      prisma.order.findMany({
+        where: { ...baseWhere, orderType: 'COD', codStatus: { in: ['PENDING', 'pending', 'Pending'] } },
+        select: { totalAmount: true, advancePayment: true }
+      }),
+      prisma.order.findMany({
+        where: { ...baseWhere, orderType: 'COD', codStatus: { in: ['RECEIVED', 'received', 'Received'] } },
+        select: { totalAmount: true, advancePayment: true }
+      }),
+      prisma.order.count({ where: { ...baseWhere, orderType: 'NON-COD' } }),
+      prisma.order.aggregate({ where: { ...baseWhere, orderType: 'NON-COD' }, _sum: { totalAmount: true } }),
+      prisma.order.aggregate({ where: baseWhere, _sum: { advancePayment: true } }),
+      prisma.order.count({ where: { status: { in: ['returned', 'RETURNED'] }, ...dateFilter } }),
+      prisma.order.aggregate({
+        where: { status: { in: ['returned', 'RETURNED'] }, ...dateFilter },
+        _sum: { totalAmount: true }
+      }),
+      prisma.order.count({ where: { ...yearWhere, orderType: 'COD' } }),
+      prisma.order.count({ where: { ...yearWhere, orderType: 'NON-COD' } }),
+      prisma.order.aggregate({ where: yearWhere, _sum: { totalAmount: true } }),
+      prisma.order.findMany({
+        where: legacyPendingWhere,
+        select: { totalAmount: true, advancePayment: true }
+      }),
+      prisma.order.count({ where: allTimeWhere }),
+      prisma.order.aggregate({ where: allTimeWhere, _sum: { totalAmount: true } }),
+    ]);
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    const codSales = codSalesAgg._sum.totalAmount || 0;
+    const nonCodSales = nonCodSalesAgg._sum.totalAmount || 0;
+    const totalAdvance = advanceAgg._sum.advancePayment || 0;
+    const returnedSales = returnedSalesAgg._sum.totalAmount || 0;
+    const yearTotalSales = yearSalesAgg._sum.totalAmount || 0;
     const allTimeSales = allTimeSalesAgg._sum.totalAmount || 0;
+
+    const codPendingAmount = pendingCodOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
+    const codReceivedAmount = receivedCodOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
+    const legacyPendingAmount = legacyPendingOrders.reduce((sum, o) => sum + Math.max(0, o.totalAmount - o.advancePayment), 0);
 
     return {
       cod: {
