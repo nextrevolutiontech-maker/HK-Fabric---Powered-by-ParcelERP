@@ -86,6 +86,8 @@ model Order {
   @@index([status])
   @@index([codStatus])
   @@index([createdAt])
+  @@index([customerId])       // PERF FIX: speeds up customer join queries
+  @@index([handledBy])        // PERF FIX: speeds up staff filter queries
 }
 
 model OrderItem {
@@ -162,6 +164,10 @@ model Activity {
   details     String?
   isReverted  Boolean  @default(false)
   createdAt   DateTime @default(now())
+
+  @@index([orderId])          // PERF FIX: fast lookup by order
+  @@index([createdAt])        // PERF FIX: fast sorting/filtering by date
+  @@index([performedBy])      // PERF FIX: fast staff-level filtering
 }
 
 model Setting {

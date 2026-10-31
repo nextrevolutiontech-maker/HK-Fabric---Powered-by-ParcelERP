@@ -6779,8 +6779,9 @@ export default function App() {
         receivedDate: o.codPayments?.[0]?.receivedDate ? new Date(o.codPayments[0].receivedDate).toISOString().split('T')[0] : undefined
       }));
     },
-    // Keep orders fresh for 2 minutes — no refetch on every screen switch
-    staleTime: 2 * 60 * 1000,
+    // PERF FIX: Keep orders fresh for 5 minutes — prevents re-fetch on every screen switch
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 
   const { data: activityLogs = [] } = useQuery({
@@ -6790,8 +6791,9 @@ export default function App() {
       if (!res.ok) throw new Error("Failed to fetch activities");
       return (await safeResponseJson(res)) || [];
     },
-    // Activity logs don't change every second — 5 minute cache
+    // PERF FIX: Activity logs cached for 5 minutes, gc for 15 minutes
     staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 
   const [globalToast, setGlobalToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);

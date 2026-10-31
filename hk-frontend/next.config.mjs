@@ -15,6 +15,8 @@ const nextConfig = {
   reactStrictMode: true,
   // Enable gzip/brotli compression for smaller JS/CSS transfer
   compress: true,
+  // PERF FIX: Empty turbopack config silences the webpack/turbopack conflict warning in Next.js 16+
+  turbopack: {},
   async headers() {
     return [
       {
@@ -46,4 +48,3 @@ const nextConfig = {
 };
 
 export default withPWA(nextConfig);
-

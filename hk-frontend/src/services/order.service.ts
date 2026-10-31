@@ -168,24 +168,77 @@ export const OrderService = {
       where.OR = searchConditions;
     }
 
-    const totalCount = await prisma.order.count({ where });
-
     const safePage = Math.max(1, Number(page));
     const safeLimit = Math.max(1, Math.min(500, Number(limit)));
     const skip = (safePage - 1) * safeLimit;
 
-    const orders = await prisma.order.findMany({
-      where,
-      include: {
-        customer: true,
-        items: true,
-        trackingEntries: { orderBy: { createdAt: 'desc' } },
-        codPayments: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: safeLimit,
-    });
+    // ── PERF FIX: Run count + findMany in PARALLEL (was sequential — doubled latency) ──
+    const [totalCount, orders] = await Promise.all([
+      prisma.order.count({ where }),
+      prisma.order.findMany({
+        where,
+        select: {
+          id: true,
+          orderNo: true,
+          handledBy: true,
+          orderType: true,
+          totalAmount: true,
+          deliveryCharges: true,
+          advancePayment: true,
+          paymentType: true,
+          status: true,
+          codStatus: true,
+          isLabelPrinted: true,
+          voidReason: true,
+          notes: true,
+          createdAt: true,
+          updatedAt: true,
+          // Lean selects — only the fields the frontend actually uses
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              alternatePhone: true,
+              province: true,
+              city: true,
+              address: true,
+            }
+          },
+          items: {
+            select: {
+              id: true,
+              productName: true,
+              qty: true,
+              unitPrice: true,
+              lineTotal: true,
+            }
+          },
+          trackingEntries: {
+            select: {
+              id: true,
+              courierName: true,
+              trackingNumber: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 2, // Only 2 tracking entries needed (primary + secondary)
+          },
+          codPayments: {
+            select: {
+              id: true,
+              amount: true,
+              receivedDate: true,
+            },
+            take: 1, // Only most recent COD payment needed for list view
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: safeLimit,
+      }),
+    ]);
+    // ─────────────────────────────────────────────────────────────────────────
 
     return {
       orders,
@@ -758,15 +811,35 @@ export const OrderService = {
     const targetCourier = courierName || existingOrder.trackingEntries?.[0]?.courierName || 'Other';
     const isLocalRider = targetCourier.toLowerCase().includes('local') || targetCourier.toLowerCase().includes('rider');
 
-    if (trackingNumber && trackingNumber.trim() && !isLocalRider) {
-      const normalizedTrack = normalizeTracking(trackingNumber);
-      const existingEntry = await prisma.trackingEntry.findFirst({
-        where: { 
-          trackingNumber: normalizedTrack,
-          orderId: { not: targetId }
-        },
-        include: { order: { include: { customer: true } } }
-      });
+    // ── PERF FIX: Run both tracking duplicate-checks in PARALLEL (was sequential) ──
+    const needsTrack1Check = Boolean(trackingNumber && trackingNumber.trim() && !isLocalRider);
+    const needsTrack2Check = Boolean(trackingNumber2 && trackingNumber2.trim() && !isLocalRider);
+
+    if (needsTrack1Check || needsTrack2Check) {
+      const normalizedTrack  = needsTrack1Check ? normalizeTracking(trackingNumber!)  : null;
+      const normalizedTrack2 = needsTrack2Check ? normalizeTracking(trackingNumber2!) : null;
+
+      const [existingEntry, existingEntry2] = await Promise.all([
+        normalizedTrack
+          ? prisma.trackingEntry.findFirst({
+              where: { trackingNumber: normalizedTrack, orderId: { not: targetId } },
+              select: {
+                courierName: true,
+                order: { select: { orderNo: true, status: true, createdAt: true, customer: { select: { name: true, phone: true } } } }
+              }
+            })
+          : null,
+        normalizedTrack2
+          ? prisma.trackingEntry.findFirst({
+              where: { trackingNumber: normalizedTrack2, orderId: { not: targetId } },
+              select: {
+                courierName: true,
+                order: { select: { orderNo: true, status: true, createdAt: true, customer: { select: { name: true, phone: true } } } }
+              }
+            })
+          : null,
+      ]);
+
       if (existingEntry) {
         throw new DuplicateTrackingError(
           `Tracking number "${trackingNumber}" is already assigned to Order #${existingEntry.order.orderNo}.`,
@@ -780,17 +853,6 @@ export const OrderService = {
           }
         );
       }
-    }
-
-    if (trackingNumber2 && trackingNumber2.trim() && !isLocalRider) {
-      const normalizedTrack2 = normalizeTracking(trackingNumber2);
-      const existingEntry2 = await prisma.trackingEntry.findFirst({
-        where: { 
-          trackingNumber: normalizedTrack2,
-          orderId: { not: targetId }
-        },
-        include: { order: { include: { customer: true } } }
-      });
       if (existingEntry2) {
         throw new DuplicateTrackingError(
           `Secondary tracking number "${trackingNumber2}" is already assigned to Order #${existingEntry2.order.orderNo}.`,
@@ -805,6 +867,7 @@ export const OrderService = {
         );
       }
     }
+    // ─────────────────────────────────────────────────────────────────────────
 
     return prisma.$transaction(async (tx) => {
       let customerId = data.customerId;
